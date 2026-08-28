@@ -148,19 +148,6 @@ Each role has its own curated list of required skills and a typical experience l
 
 </details>
 
-## Roadmap
-
-Ideas for Round 2 and beyond:
-
-- Wire `brain.py` up as a real backend service instead of a stub
-- Persist assessment history - everything currently lives in Streamlit's session state and resets on refresh
-- Let users define custom roles and required-skill sets
-- Add lightweight auth so proficiency data survives across sessions
-
-## Contributing
-
-This started as a hackathon submission, but issues and PRs are welcome - bug fixes, new roles/skills, or UI polish are all fair game. Fork the repo, make your changes, and open a pull request.
-
 ## Team
 
 Built by [@iwannabemitul](https://github.com/iwannabemitul), [@sharma-ronak](https://github.com/sharma-ronak75), @nitika for the DevStorm 2026 Hackathon.
