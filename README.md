@@ -15,10 +15,7 @@ Upload a resume or hand-pick your skills, choose a target job role, and get back
 - [How It Works](#how-it-works)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
 - [Supported Roles](#supported-roles)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
 - [Team](#team)
 - [License](#license)
 
