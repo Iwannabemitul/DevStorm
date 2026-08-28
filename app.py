@@ -223,14 +223,34 @@ PROFICIENCY_WEIGHTS = {
 def parse_custom_skills(raw_text):
     return [s.strip() for s in raw_text.split(",") if s.strip()]
 
+def get_gemini_api_keys():
+    """Return configured Gemini keys in failover order, without exposing them."""
+    configured_keys = st.secrets.get("GEMINI_API_KEYS", [])
+    if isinstance(configured_keys, str):
+        # Also accept a comma-separated value for hosts whose secret UI has no list editor.
+        configured_keys = configured_keys.split(",")
+    elif not isinstance(configured_keys, (list, tuple)):
+        configured_keys = [configured_keys]
+
+    keys = [str(key).strip() for key in configured_keys if key and str(key).strip()]
+
+    # Keep the original single-key secret working during and after migration.
+    legacy_key = st.secrets.get("GEMINI_API_KEY")
+    if legacy_key and str(legacy_key).strip():
+        keys.append(str(legacy_key).strip())
+
+    # Preserve priority order while preventing the same key from being tried twice.
+    return list(dict.fromkeys(keys))
+
 def llm_provider_configured():
-    return bool(st.secrets.get("GEMINI_API_KEY")) or bool(st.secrets.get("NVIDIA_API_KEY"))
+    return bool(get_gemini_api_keys()) or bool(st.secrets.get("NVIDIA_API_KEY"))
 
 def call_llm_resilient(prompt):
     errors = []
-    
-    gemini_key = st.secrets.get("GEMINI_API_KEY")
-    if gemini_key:
+
+    # Each key is attempted in order. A quota/rate-limit error on one key simply
+    # moves to the next key; if all fail, the caller uses the non-AI fallback.
+    for key_number, gemini_key in enumerate(get_gemini_api_keys(), start=1):
         try:
             genai.configure(api_key=gemini_key)
             available_models = [
@@ -267,8 +287,9 @@ def call_llm_resilient(prompt):
                 return text
             raise RuntimeError("Gemini returned an empty response.")
         except Exception as e:
-            errors.append(f"Gemini Error: {str(e)}")
-            print(f"Gemini call failed: {e}")
+            # Do not include secret values or provider details in the user-facing error.
+            errors.append(f"Gemini key {key_number} was unavailable")
+            print(f"Gemini key {key_number} failed: {e}")
 
     nvidia_key = st.secrets.get("NVIDIA_API_KEY")
     if nvidia_key:
