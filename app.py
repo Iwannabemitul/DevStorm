@@ -275,7 +275,7 @@ def call_llm_resilient(prompt):
         try:
             client = OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=nvidia_key)
             completion = client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct",  # <--- CHANGE TO 3.3 OR 3.2
+                model="meta/llama-3.3-70b-instruct-v2",  # <--- CHANGE TO 3.3 OR 3.2
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1500,
                 temperature=0.2,
