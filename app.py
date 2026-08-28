@@ -223,34 +223,14 @@ PROFICIENCY_WEIGHTS = {
 def parse_custom_skills(raw_text):
     return [s.strip() for s in raw_text.split(",") if s.strip()]
 
-def get_gemini_api_keys():
-    """Return configured Gemini keys in failover order, without exposing them."""
-    configured_keys = st.secrets.get("GEMINI_API_KEYS", [])
-    if isinstance(configured_keys, str):
-        # Also accept a comma-separated value for hosts whose secret UI has no list editor.
-        configured_keys = configured_keys.split(",")
-    elif not isinstance(configured_keys, (list, tuple)):
-        configured_keys = [configured_keys]
-
-    keys = [str(key).strip() for key in configured_keys if key and str(key).strip()]
-
-    # Keep the original single-key secret working during and after migration.
-    legacy_key = st.secrets.get("GEMINI_API_KEY")
-    if legacy_key and str(legacy_key).strip():
-        keys.append(str(legacy_key).strip())
-
-    # Preserve priority order while preventing the same key from being tried twice.
-    return list(dict.fromkeys(keys))
-
 def llm_provider_configured():
-    return bool(get_gemini_api_keys()) or bool(st.secrets.get("NVIDIA_API_KEY"))
+    return bool(st.secrets.get("GEMINI_API_KEY")) or bool(st.secrets.get("NVIDIA_API_KEY"))
 
 def call_llm_resilient(prompt):
     errors = []
-
-    # Each key is attempted in order. A quota/rate-limit error on one key simply
-    # moves to the next key; if all fail, the caller uses the non-AI fallback.
-    for key_number, gemini_key in enumerate(get_gemini_api_keys(), start=1):
+    
+    gemini_key = st.secrets.get("GEMINI_API_KEY")
+    if gemini_key:
         try:
             genai.configure(api_key=gemini_key)
             available_models = [
@@ -259,8 +239,9 @@ def call_llm_resilient(prompt):
             ]
             
             # Use stable, highly-available models
+            # Use stable, highly-available models
             candidate_priority = [
-                "models/gemini-3.6-flash",
+                "models/gemini-3.6-flash",   # <--- ADD THIS AT THE TOP
                 "models/gemini-1.5-flash",
                 "models/gemini-1.5-pro",
                 "models/gemini-2.0-flash",
@@ -286,16 +267,15 @@ def call_llm_resilient(prompt):
                 return text
             raise RuntimeError("Gemini returned an empty response.")
         except Exception as e:
-            # Do not include secret values or provider details in the user-facing error.
-            errors.append(f"Gemini key {key_number} was unavailable")
-            print(f"Gemini key {key_number} failed: {e}")
+            errors.append(f"Gemini Error: {str(e)}")
+            print(f"Gemini call failed: {e}")
 
     nvidia_key = st.secrets.get("NVIDIA_API_KEY")
     if nvidia_key:
         try:
             client = OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=nvidia_key)
             completion = client.chat.completions.create(
-                model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+                model="meta/llama-3.3-70b-instruct",  # <--- CHANGE TO 3.3 OR 3.2
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1500,
                 temperature=0.2,
