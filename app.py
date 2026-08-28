@@ -259,9 +259,8 @@ def call_llm_resilient(prompt):
             ]
             
             # Use stable, highly-available models
-            # Use stable, highly-available models
             candidate_priority = [
-                "models/gemini-3.6-flash",   # <--- ADD THIS AT THE TOP
+                "models/gemini-3.6-flash",
                 "models/gemini-1.5-flash",
                 "models/gemini-1.5-pro",
                 "models/gemini-2.0-flash",
@@ -296,7 +295,7 @@ def call_llm_resilient(prompt):
         try:
             client = OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=nvidia_key)
             completion = client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct",  # <--- CHANGE TO 3.3 OR 3.2
+                model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1500,
                 temperature=0.2,
