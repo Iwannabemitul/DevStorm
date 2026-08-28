@@ -22,4 +22,4 @@ def process_data(payload: Payload):
     fake_result = f"Python processed: {payload.text.upper()}"
     # ---------------------------------------------------------
     
-    return {"status": "success", "output": fake_result}
+    return {"status": "success", "output": fake_result} 
