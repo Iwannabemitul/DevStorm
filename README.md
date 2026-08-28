@@ -1,11 +1,10 @@
 # SkillGap Intelligence
 
-**AI-powered skill-gap and career-readiness analysis — built for the DevStorm 2026 Hackathon (Round 1).**
+**AI-powered skill-gap and career-readiness analyzer**
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B)
 ![AI](https://img.shields.io/badge/AI-Gemini%20%2F%20Llama%203.3-4285F4)
-![Status](https://img.shields.io/badge/status-hackathon%20submission-lightgrey)
 
 Upload a resume or hand-pick your skills, choose a target job role, and get back a readiness score, a visual skill-gap breakdown, and an AI-written 4-week roadmap for closing the gaps — all in one Streamlit app.
 
@@ -27,19 +26,19 @@ Upload a resume or hand-pick your skills, choose a target job role, and get back
 
 SkillGap Intelligence answers one question for job seekers and career-switchers: **"How ready am I for this role, and what should I do next?"**
 
-Instead of a static checklist, it uses an LLM to *semantically* compare your skills against a role's requirements — so knowing PyTorch can reasonably count toward "Machine Learning," the way a human recruiter would read a resume, rather than requiring an exact keyword match. The output is a readiness score, a categorized skill-gap breakdown, and a prioritized, project-based learning roadmap.
+Instead of a static checklist, it uses an LLM to *semantically* compare your skills against a role's requirements - so knowing PyTorch can reasonably count toward "Machine Learning," the way a human recruiter would read a resume, rather than requiring an exact keyword match. The output is a readiness score, a categorized skill-gap breakdown, and a prioritized, project-based learning roadmap.
 
-**Demo:** not yet deployed — run it locally with the steps in [Getting Started](#getting-started).
+**Demo:** [skillprofile.streamlit.app](https://skillprofile.streamlit.app/)
 
 ## Features
 
-- **Resume skill extraction** — upload a PDF/TXT resume; an LLM call pulls out technical skills and pre-fills the picker for you.
-- **37 target roles across 14 domains** — software engineering, data, AI/ML, hardware & embedded, mobile, game dev, cloud & DevOps, cybersecurity, Web3, databases, QA, product/program management, design, and marketing (full list in [Supported Roles](#supported-roles)).
+- **Resume skill extraction** - upload a PDF/TXT resume; an LLM call pulls out technical skills and pre-fills the picker for you.
+- **37 target roles across 14 domains** - software engineering, data, AI/ML, hardware & embedded, mobile, game dev, cloud & DevOps, cybersecurity, Web3, databases, QA, product/program management, design, and marketing (full list in [Supported Roles](#supported-roles)).
 - **Skill picker** with 80+ predefined technologies, plus free-text custom skills for anything not on the list.
-- **Per-skill proficiency sliders** — Beginner / Intermediate / Advanced — so the score reflects depth, not just familiarity.
-- **AI semantic gap analysis** — Gemini-first, Llama-3.3-via-NVIDIA-fallback scoring of Role Readiness and Skill Coverage, with every required skill bucketed into Strong Match, Needs Improvement, or Critical Missing Gap. Falls back to deterministic keyword matching if no AI provider is reachable.
+- **Per-skill proficiency sliders** - Beginner / Intermediate / Advanced - so the score reflects depth, not just familiarity.
+- **AI semantic gap analysis** - Gemini-first, Llama-3.3-via-NVIDIA-fallback scoring of Role Readiness and Skill Coverage, with every required skill bucketed into Strong Match, Needs Improvement, or Critical Missing Gap. Falls back to deterministic keyword matching if no AI provider is reachable.
 - **Radar + bar chart visualizations** of your profile against the role baseline.
-- **Prioritized action plan** — critical gaps first, then beginner-level skills worth strengthening.
+- **Prioritized action plan** - critical gaps first, then beginner-level skills worth strengthening.
 - **AI-generated 4-week learning roadmap** for critical gaps, with every topic linked out to a YouTube search.
 - **One-click Markdown report** of the full assessment, ready to download.
 
@@ -49,7 +48,7 @@ Instead of a static checklist, it uses an LLM to *semantically* compare your ski
 
 ![Upload resume screen](screenshots/01-upload-resume.png)
 
-**2. Pick a target role and set your skills** — from the extracted resume, the predefined list, or typed in manually.
+**2. Pick a target role and set your skills** - from the extracted resume, the predefined list, or typed in manually.
 
 ![Target role and skill selection](screenshots/02-configure-role-skills.png)
 
@@ -61,7 +60,7 @@ Instead of a static checklist, it uses an LLM to *semantically* compare your ski
 
 ![Analysis in progress](screenshots/04-run-analysis.png)
 
-**5. Read your results** — Role Readiness, Skill Coverage, Strong Matches, and Critical Gaps, at a glance.
+**5. Read your results** - Role Readiness, Skill Coverage, Strong Matches, and Critical Gaps, at a glance.
 
 ![Results overview](screenshots/05-results-overview.png)
 
@@ -97,42 +96,6 @@ DevStorm/
 ├── .devcontainer/        # Dev container config (GitHub Codespaces)
 └── .gitignore
 ```
-
-> `brain.py` is an early scaffold for a separate processing service — right now it just health-checks and echoes back uppercased text — and isn't wired into `app.py` yet. All of the app's real logic (scoring, charts, LLM calls) currently lives in `app.py`.
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- A [Gemini API key](https://aistudio.google.com/app/apikey) and/or an [NVIDIA NIM API key](https://build.nvidia.com/) — at least one is required for **resume skill extraction** and the **AI-generated roadmap**. The core gap analysis will still run without a key, falling back to deterministic keyword matching instead of the semantic LLM evaluation.
-
-### Installation
-
-```bash
-git clone https://github.com/sharma-ronak75/DevStorm.git
-cd DevStorm
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Configuration
-
-Create `.streamlit/secrets.toml` in the project root (already gitignored, so it's safe to put real keys here):
-
-```toml
-GEMINI_API_KEY = "your-gemini-api-key"
-NVIDIA_API_KEY = "your-nvidia-api-key"   # optional fallback
-```
-
-### Run the app
-
-```bash
-streamlit run app.py
-```
-
-The app opens at `http://localhost:8501`.
 
 ## Supported Roles
 
@@ -200,7 +163,7 @@ This started as a hackathon submission, but issues and PRs are welcome — bug f
 
 ## Team
 
-Built by [@sharma-ronak75](https://github.com/sharma-ronak75) for the DevStorm 2026 Hackathon. This repository is a fork of the team's original submission at [Iwannabemitul/DevStorm](https://github.com/Iwannabemitul/DevStorm).
+Built by [@iwannabemitul](https://github.com/iwannabemitul), [@sharma-ronak](https://github.com/sharma-ronak75), @nitika for the DevStorm 2026 Hackathon.
 
 ## License
 
