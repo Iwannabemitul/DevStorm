@@ -6,7 +6,7 @@
 ![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B)
 ![AI](https://img.shields.io/badge/AI-Gemini%20%2F%20Llama%203.3-4285F4)
 
-Upload a resume or hand-pick your skills, choose a target job role, and get back a readiness score, a visual skill-gap breakdown, and an AI-written 4-week roadmap for closing the gaps — all in one Streamlit app.
+Upload a resume or hand-pick your skills, choose a target job role, and get back a readiness score, a visual skill-gap breakdown, and an AI-written 4-week roadmap for closing the gaps - all in one Streamlit app.
 
 ## Table of Contents
 
@@ -81,7 +81,7 @@ Instead of a static checklist, it uses an LLM to *semantically* compare your ski
 | Layer | Tools |
 |---|---|
 | UI | [Streamlit](https://streamlit.io/) |
-| AI / LLM | [Google Gemini](https://ai.google.dev/) (primary — auto-selects the best available model on your account), [Llama 3.3 70B via NVIDIA NIM](https://build.nvidia.com/) (fallback) |
+| AI / LLM | [Google Gemini](https://ai.google.dev/) (primary - auto-selects the best available model on your account), [Llama 3.3 70B via NVIDIA NIM](https://build.nvidia.com/) (fallback) |
 | Charts | [Plotly](https://plotly.com/python/) (radar + bar charts) |
 | Resume parsing | [PyPDF2](https://pypi.org/project/PyPDF2/) |
 | Language | Python 3 |
@@ -90,7 +90,7 @@ Instead of a static checklist, it uses an LLM to *semantically* compare your ski
 
 ```text
 DevStorm/
-├── app.py              # Main Streamlit app — UI, scoring logic, charts, LLM calls
+├── app.py              # Main Streamlit app - UI, scoring logic, charts, LLM calls
 ├── brain.py             # Scaffolded FastAPI microservice, not currently used by app.py
 ├── requirements.txt     # Pinned Python dependencies
 ├── .devcontainer/        # Dev container config (GitHub Codespaces)
@@ -153,13 +153,13 @@ Each role has its own curated list of required skills and a typical experience l
 Ideas for Round 2 and beyond:
 
 - Wire `brain.py` up as a real backend service instead of a stub
-- Persist assessment history — everything currently lives in Streamlit's session state and resets on refresh
+- Persist assessment history - everything currently lives in Streamlit's session state and resets on refresh
 - Let users define custom roles and required-skill sets
 - Add lightweight auth so proficiency data survives across sessions
 
 ## Contributing
 
-This started as a hackathon submission, but issues and PRs are welcome — bug fixes, new roles/skills, or UI polish are all fair game. Fork the repo, make your changes, and open a pull request.
+This started as a hackathon submission, but issues and PRs are welcome - bug fixes, new roles/skills, or UI polish are all fair game. Fork the repo, make your changes, and open a pull request.
 
 ## Team
 
@@ -167,4 +167,4 @@ Built by [@iwannabemitul](https://github.com/iwannabemitul), [@sharma-ronak](htt
 
 ## License
 
-No license file is currently included in this repository. Until one is added, all rights are reserved by the authors — reach out before reusing this code outside the hackathon.
+No license file is currently included in this repository. Until one is added, all rights are reserved by the authors - reach out before reusing this code outside the hackathon.
