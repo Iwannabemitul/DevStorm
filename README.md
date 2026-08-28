@@ -147,7 +147,7 @@ Each role has its own curated list of required skills and a typical experience l
 
 ## Team
 
-Built by [@iwannabemitul](https://github.com/iwannabemitul), [@sharma-ronak](https://github.com/sharma-ronak75), [@nitika](https://github.com/thenitikakaushik) for the DevStorm 2026 Hackathon.
+Built by [@iwannabemitul](https://github.com/iwannabemitul), [@sharma-ronak](https://github.com/sharma-ronak75), [@nitika](https://github.com/thenitikakaushik) for the DevStorm 2026 Hackathon (Round - 1).
 
 ## License
 
