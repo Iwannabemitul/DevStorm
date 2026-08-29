@@ -25,6 +25,7 @@ NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 # Ordered priority list for NVIDIA NIM models
 NVIDIA_CANDIDATE_MODELS: List[str] = [
+    "google/diffusiongemma-26b-a4b-it",
     "moonshotai/kimi-k3",
     "meta/llama-3.3-70b-instruct",
     "mistralai/mistral-nemo-12b-instruct",
