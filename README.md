@@ -78,7 +78,7 @@ Instead of a static checklist, it uses an LLM to *semantically* compare your ski
 | Layer | Tools |
 |---|---|
 | UI | [Streamlit](https://streamlit.io/) |
-| AI / LLM | [Google Gemini](https://ai.google.dev/) (primary - auto-selects the best available model on your account), [Llama 3.3 70B via NVIDIA NIM](https://build.nvidia.com/) (fallback) |
+| AI / LLM | [Google Gemini](https://ai.google.dev/)  [Llama 3.3 70B via NVIDIA NIM](https://build.nvidia.com/) (fallback) |
 | Charts | [Plotly](https://plotly.com/python/) (radar + bar charts) |
 | Resume parsing | [PyPDF2](https://pypi.org/project/PyPDF2/) |
 | Language | Python 3 |
