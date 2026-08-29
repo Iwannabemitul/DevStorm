@@ -150,10 +150,10 @@ def render_step0():
         "<style>[data-testid='stSidebar'], [data-testid='collapsedControl'] {display:none;}</style>",
         unsafe_allow_html=True,
     )
-    st.markdown("<h1 style='text-align:center;'>SkillGap Intelligence</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>Skill Gap Analyser</h1>", unsafe_allow_html=True)
     st.markdown(
         "<p style='text-align:center;color:rgba(230,238,245,0.7);font-size:1.05rem;'>"
-        "A data-driven readiness assessment for your next career move.</p>",
+        "Don't guess your next move. <b style='color:rgb(200,200,200);font-size:17px; text-shadow: 0px 0px 5px cyan;'>Measure</b> it</p>",
         unsafe_allow_html=True,
     )
     st.write("")
@@ -166,7 +166,7 @@ def render_step0():
             """
             <div class="onboard-card">
                 <div class="onboard-icon">📄</div>
-                <div class="onboard-title">Upload Resume</div>
+                <div class="onboard-title">Upload Resume or CV</div>
                 <div class="onboard-desc">Let AI extract your skills automatically from a PDF or TXT resume.</div>
             </div>
             """,
@@ -211,7 +211,7 @@ def render_step1():
 
     if st.session_state.input_mode == "resume":
         st.markdown('<div class="tour-focus"></div>', unsafe_allow_html=True)
-        st.info("💡 **Guide:** Upload your resume here — the AI will read it and pull out your technical skills automatically.")
+        st.info(" **Guide:** Upload your resume here — the AI will read it and pull out your technical skills automatically.")
         resume_file = st.file_uploader("Upload your resume", type=["pdf", "txt"], key="resume_uploader")
         extract_clicked = st.button("Extract Skills from Resume", key="btn_extract")
 
@@ -375,7 +375,7 @@ def render_step2():
     st.write("")
     st.markdown('<div class="pulse-anchor"></div>', unsafe_allow_html=True)
     generate_clicked = st.button(
-        "🚀 Generate Intelligence Report",
+        " Generate Intelligence Report",
         type="primary",
         use_container_width=True,
         key="btn_generate",
