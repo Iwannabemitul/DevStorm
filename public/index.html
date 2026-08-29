@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SkillGap Intelligence</title>
+<link rel="icon" href="/assets/icon.png" />
+<link rel="stylesheet" href="/css/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="margin"></div>
+
+<div class="app-shell">
+
+  <!-- ============================================================ -->
+  <!-- STEP 0 — Entry mode -->
+  <!-- ============================================================ -->
+  <section id="step-0" class="step step-landing">
+    <img src="/assets/icon.png" class="brand-mark" alt="" width="120" />
+    <h1 class="landing-title">Skill Gap Analyser</h1>
+    <p class="landing-sub">Don't guess your next move. <span class="accent">Measure</span> it.</p>
+
+    <div class="onboard-grid">
+      <button class="onboard-card" id="btn-mode-resume" type="button">
+        <span class="onboard-icon">📄</span>
+        <span class="onboard-title">Upload Resume or CV</span>
+        <span class="onboard-desc">Let AI extract your skills automatically from a PDF or TXT resume.</span>
+      </button>
+      <button class="onboard-card" id="btn-mode-manual" type="button">
+        <span class="onboard-icon">🛠️</span>
+        <span class="onboard-title">Enter Skills Manually</span>
+        <span class="onboard-desc">Pick your tech stack from a curated list and set your own proficiency.</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- STEP 1 — Skills + verification -->
+  <!-- ============================================================ -->
+  <section id="step-1" class="step hidden">
+    <p class="step-caption">Step 2 of 4 · Data Gathering</p>
+    <div class="progress-track"><div class="progress-fill" style="width:25%"></div></div>
+    <h2>Tell us about your current skills</h2>
+
+    <!-- Resume mode -->
+    <div id="resume-panel" class="panel hidden">
+      <div class="callout callout-info">
+        <strong>Guide:</strong> Upload your resume here — the AI will read it and pull out your technical skills automatically.
+      </div>
+      <div class="field-row">
+        <input type="file" id="resume-file" accept=".pdf,.txt" />
+        <button class="btn btn-secondary" id="btn-extract" type="button">Extract Skills from Resume</button>
+      </div>
+      <div id="extract-status" class="status-line"></div>
+
+      <div id="detected-skills-wrap" class="hidden">
+        <p class="field-label"><strong>Detected skills:</strong></p>
+        <div id="detected-skills" class="callout callout-info"></div>
+      </div>
+
+      <label class="field-label" for="resume-extra-skills">Add or correct skills (comma-separated)</label>
+      <input type="text" id="resume-extra-skills" placeholder="e.g. Rust, Kanban, Figma" />
+    </div>
+
+    <!-- Manual mode -->
+    <div id="manual-panel" class="panel hidden">
+      <label class="field-label" for="manual-search">Your current skills</label>
+      <div class="multiselect" id="manual-multiselect">
+        <input type="text" id="manual-search" placeholder="Search and select from the skill list..." autocomplete="off" />
+        <div id="manual-options" class="multiselect-options hidden"></div>
+        <div id="manual-chips" class="chip-row"></div>
+      </div>
+
+      <label class="field-label" for="manual-custom-skills">Add custom skills not listed above (comma-separated)</label>
+      <input type="text" id="manual-custom-skills" placeholder="e.g. Rust, Kanban, Figma" />
+    </div>
+
+    <div id="proficiency-section" class="hidden">
+      <details class="expander" open>
+        <summary>Adjust Skill Proficiency Levels</summary>
+        <p class="field-caption">Set your confidence level for each skill.</p>
+        <div id="proficiency-list"></div>
+      </details>
+    </div>
+    <div id="proficiency-empty" class="callout callout-info">Add skills above to configure proficiency levels.</div>
+
+    <hr class="divider" />
+    <p class="field-label"><strong>Verify with public coding profiles (optional)</strong> — strengthens your report</p>
+
+    <div class="verify-row">
+      <input type="text" id="leetcode-username" placeholder="e.g. johndoe123" />
+      <button class="btn btn-secondary" id="btn-verify-leetcode" type="button">Verify LeetCode</button>
+    </div>
+    <div id="leetcode-result" class="status-line"></div>
+
+    <div class="verify-row">
+      <input type="text" id="github-username" placeholder="e.g. johndoe" />
+      <button class="btn btn-secondary" id="btn-verify-github" type="button">Verify GitHub</button>
+    </div>
+    <div id="github-result" class="status-line"></div>
+
+    <hr class="divider" />
+    <div class="nav-row">
+      <button class="btn btn-ghost" id="btn-back-to-0" type="button">← Back</button>
+      <button class="btn btn-primary btn-grow" id="btn-continue-to-2" type="button">Continue →</button>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- STEP 2 — Target role -->
+  <!-- ============================================================ -->
+  <section id="step-2" class="step hidden">
+    <p class="step-caption">Step 3 of 4 · Target Role</p>
+    <div class="progress-track"><div class="progress-fill" style="width:55%"></div></div>
+    <h2>Where are you headed?</h2>
+
+    <div class="callout callout-info">💡 <strong>Guide:</strong> Select your target job role below so the AI can benchmark your skills.</div>
+
+    <label class="field-label" for="role-select">Target job role</label>
+    <select id="role-select"></select>
+
+    <div class="nav-row" style="margin-top:2rem;">
+      <button class="btn btn-ghost" id="btn-back-to-1" type="button">← Back</button>
+      <button class="btn btn-primary btn-grow pulse" id="btn-generate" type="button">Generate Intelligence Report</button>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- STEP 3 — Processing -->
+  <!-- ============================================================ -->
+  <section id="step-3" class="step hidden">
+    <p class="step-caption">Step 4 of 4 · Analysis</p>
+    <div class="progress-track"><div class="progress-fill" style="width:85%"></div></div>
+    <h2 id="building-for-role">Building your report</h2>
+
+    <div class="loader-wrap">
+      <div class="spinner"></div>
+      <p id="fun-fact-text">Warming up the analysis engine...</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- STEP 4 — Results -->
+  <!-- ============================================================ -->
+  <section id="step-4" class="step hidden">
+    <div id="ai-error-banner" class="callout callout-error hidden"></div>
+
+    <h2 id="results-role-title">Results</h2>
+    <div class="callout callout-info" id="results-exp-level"></div>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-label">Role Readiness</span>
+        <span class="metric-value" id="metric-readiness">0%</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Skill Coverage</span>
+        <span class="metric-value" id="metric-coverage">0%</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Strong Matches</span>
+        <span class="metric-value" id="metric-strong">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Critical Gaps</span>
+        <span class="metric-value" id="metric-critical">0</span>
+      </div>
+    </div>
+
+    <p class="field-label">Role Readiness</p>
+    <div class="progress-track"><div class="progress-fill" id="bar-readiness" style="width:0%"></div></div>
+    <p class="field-label">Skill Coverage</p>
+    <div class="progress-track"><div class="progress-fill" id="bar-coverage" style="width:0%"></div></div>
+
+    <hr class="divider" />
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="analysis">Gap Analysis</button>
+      <button class="tab-btn" data-tab="roadmap">Interactive Roadmap</button>
+    </div>
+
+    <div id="tab-analysis" class="tab-panel">
+      <div class="chart-wrap">
+        <canvas id="radar-chart"></canvas>
+      </div>
+      <details class="expander" open>
+        <summary>Skill Fulfillment Bar Chart</summary>
+        <p class="field-caption">Each bar shows how closely your current level meets the 100% requirement.</p>
+        <div class="chart-wrap chart-wrap-bar"><canvas id="bar-chart"></canvas></div>
+      </details>
+
+      <div class="gap-grid">
+        <div>
+          <p class="field-label"><strong>Strong Matches</strong></p>
+          <div id="list-strong" class="callout callout-success"></div>
+        </div>
+        <div>
+          <p class="field-label"><strong>Needs Improvement</strong></p>
+          <div id="list-improve" class="callout callout-warning"></div>
+        </div>
+        <div>
+          <p class="field-label"><strong>Critical Missing Gaps</strong></p>
+          <div id="list-critical" class="callout callout-error"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-roadmap" class="tab-panel hidden">
+      <div id="roadmap-message" class="callout callout-info hidden"></div>
+      <div id="roadmap-weeks"></div>
+    </div>
+
+    <hr class="divider" />
+    <div class="nav-row">
+      <button class="btn btn-primary btn-grow" id="btn-download-report" type="button">Download Full Report (Markdown)</button>
+      <button class="btn btn-ghost" id="btn-start-over" type="button">Start Over</button>
+    </div>
+  </section>
+
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
