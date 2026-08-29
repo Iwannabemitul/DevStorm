@@ -245,15 +245,18 @@ FUN_FACTS = [
     "🔐 The first computer password was created at MIT in the 1960s — and was reportedly leaked within weeks.",
 ]
 
+
 def parse_custom_skills(raw_text):
     return [s.strip() for s in raw_text.split(",") if s.strip()]
+
 
 def llm_provider_configured():
     return bool(st.secrets.get("GEMINI_API_KEY")) or bool(st.secrets.get("NVIDIA_API_KEY"))
 
+
 def call_llm_resilient(prompt):
     errors = []
-    
+
     gemini_key = st.secrets.get("GEMINI_API_KEY")
     if gemini_key:
         try:
@@ -262,26 +265,24 @@ def call_llm_resilient(prompt):
                 m.name for m in genai.list_models()
                 if "generateContent" in m.supported_generation_methods
             ]
-            
-            # Use stable, highly-available models
-            # Use stable, highly-available models
+
             candidate_priority = [
-                "models/gemini-3.6-flash",   # <--- ADD THIS AT THE TOP
+                "models/gemini-3.6-flash",
                 "models/gemini-1.5-flash",
                 "models/gemini-1.5-pro",
                 "models/gemini-2.0-flash",
                 "models/gemini-pro"
             ]
-            
+
             selected_model_name = None
             for candidate in candidate_priority:
                 if candidate in available_models:
                     selected_model_name = candidate
                     break
-                    
+
             if selected_model_name is None and available_models:
                 selected_model_name = available_models[0]
-                
+
             if selected_model_name is None:
                 raise RuntimeError("No Gemini models supporting generateContent are available.")
 
@@ -298,9 +299,12 @@ def call_llm_resilient(prompt):
     nvidia_key = st.secrets.get("NVIDIA_API_KEY")
     if nvidia_key:
         try:
-            client = OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=nvidia_key)
+            client = OpenAI(
+                base_url="https://integrate.api.nvidia.com/v1",
+                api_key=nvidia_key,
+            )
             completion = client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct-v2",  # <--- CHANGE TO 3.3 OR 3.2
+                model="meta/llama-3.3-70b-instruct-v2",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1500,
                 temperature=0.2,
@@ -313,11 +317,11 @@ def call_llm_resilient(prompt):
             errors.append(f"NVIDIA Error: {str(e)}")
             print(f"NVIDIA fallback call failed: {e}")
 
-    # If we got here, both failed. Bubble the exact errors to the UI.
     if errors:
         raise RuntimeError(" | ".join(errors))
-    
+
     return ""
+
 
 def legacy_analyze_role(selected_role, skill_proficiency):
     role_info = JOB_DATA["job_roles"][selected_role]
@@ -361,9 +365,17 @@ def legacy_analyze_role(selected_role, skill_proficiency):
         "critical_missing": critical_missing,
     }
 
-def ai_analyze_role(target_role, required_skills, all_user_skills, skill_proficiencies, leetcode_stats=None):
+
+def ai_analyze_role(
+    target_role,
+    required_skills,
+    all_user_skills,
+    skill_proficiencies,
+    leetcode_stats=None,
+):
     proficiency_lines = ", ".join(
-        f"{skill} ({weight * 100:.0f}% proficiency)" for skill, weight in skill_proficiencies.items()
+        f"{skill} ({weight * 100:.0f}% proficiency)"
+        for skill, weight in skill_proficiencies.items()
     ) or "none provided"
 
     if leetcode_stats:
@@ -420,6 +432,7 @@ def ai_analyze_role(target_role, required_skills, all_user_skills, skill_profici
         "critical_missing": parsed["critical_missing"],
     }
 
+
 def generate_ai_roadmap(target_role, user_skills, missing_skills):
     prompt = (
         f"Act as a Senior Tech Recruiter and Mentor. The user wants to be a {target_role}. "
@@ -428,15 +441,24 @@ def generate_ai_roadmap(target_role, user_skills, missing_skills):
         "Design a highly specific, no-nonsense 4-week learning roadmap to close this gap. "
         "Do not use generic filler like 'learn X' — every task should reference a concrete "
         "project, exercise, or resource type. "
-        "Return ONLY a raw JSON object with no markdown formatting, no code fences, and no "
-        "extra text before or after it. It must match exactly this schema: "
+        "Return ONLY a raw JSON object with no code fences and no extra text before or after it. "
+        "It must match exactly this schema: "
         '{"weeks": [{"week_title": "Week 1: Fundamentals", "tasks": ["Task 1", "Task 2"]}]}. '
         "Include exactly 4 week objects, each with 3 to 5 concise, actionable tasks. "
+        "CRITICAL: Every single task in the 'tasks' array MUST contain a clickable Markdown "
+        "hyperlink pointing to a YouTube search query for that specific skill. Format the URL as "
+        "[https://www.youtube.com/results?search_query=TOPIC+NAME+tutorial]"
+        "(https://www.youtube.com/results?search_query=TOPIC+NAME+tutorial) "
+        "(replace spaces with +). Example format for a task string inside the JSON: "
+        "\"Build a basic CRUD app using [FastAPI]"
+        "(https://www.youtube.com/results?search_query=FastAPI+tutorial) connected to a local "
+        "SQLite database.\" "
         "CRITICAL: You must return valid, parseable JSON. Do NOT use double quotes inside "
         "your string values. Use single quotes for inner text (e.g., 'Learn Python' instead "
         'of "Learn Python"). Ensure all commas and brackets are perfectly formatted.'
     )
     return call_llm_resilient(prompt)
+
 
 def parse_roadmap_json(raw_text):
     if not raw_text:
@@ -449,8 +471,6 @@ def parse_roadmap_json(raw_text):
             cleaned = cleaned[4:]
         cleaned = cleaned.strip()
 
-    # Guard against stray prose wrapped around the JSON object by isolating
-    # the outermost {...} block before parsing.
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start == -1 or end == -1 or end < start:
@@ -471,16 +491,21 @@ def parse_roadmap_json(raw_text):
 
     return {"weeks": normalized_weeks}
 
+
 def roadmap_weeks_to_markdown(roadmap):
+    """Build export Markdown without escaping task text, preserving inline links."""
     if not roadmap or not roadmap.get("weeks"):
         return "_No AI roadmap was generated for this assessment._"
+
     lines = []
     for week in roadmap["weeks"]:
         lines.append(f"### {week['week_title']}")
         for task in week["tasks"]:
             lines.append(f"- [ ] {task}")
         lines.append("")
+
     return "\n".join(lines).strip()
+
 
 def fetch_leetcode_stats(username):
     username = (username or "").strip()
@@ -502,13 +527,13 @@ def fetch_leetcode_stats(username):
         st.warning(f"LeetCode username '{username}' was not found. Continuing without it.")
         return None
     if response.status_code == 429:
-        # Hackathon fallback: the free LeetCode API tier rate-limits aggressively.
-        # Rather than failing the whole flow during a live demo, fall back to a
-        # clearly-labeled demo profile so the rest of the app remains showable.
         st.toast("API Rate limited. Using Demo Profile for showcase.", icon="⚠️")
         return {"username": username, "easy": 45, "medium": 120, "hard": 15, "total": 180}
     if response.status_code != 200:
-        st.warning(f"LeetCode API returned an unexpected status ({response.status_code}). Continuing without it.")
+        st.warning(
+            f"LeetCode API returned an unexpected status ({response.status_code}). "
+            "Continuing without it."
+        )
         return None
 
     try:
@@ -527,6 +552,7 @@ def fetch_leetcode_stats(username):
     st.toast(f"Verified {stats['total']} solved problems for '{username}'!", icon="🏆")
     return stats
 
+
 def extract_skills_from_resume(text):
     prompt = (
         "Extract all technical skills, programming languages, and frameworks from the "
@@ -535,12 +561,13 @@ def extract_skills_from_resume(text):
     )
     return call_llm_resilient(prompt)
 
+
 def extract_text_from_resume_file(uploaded_file):
     if uploaded_file.name.lower().endswith(".pdf"):
         reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.getvalue()))
         return "\n".join(page.extract_text() or "" for page in reader.pages)
-    else:
-        return uploaded_file.getvalue().decode("utf-8", errors="ignore")
+    return uploaded_file.getvalue().decode("utf-8", errors="ignore")
+
 
 def route_extracted_skills(raw_skills_text):
     extracted = [s.strip() for s in raw_skills_text.split(",") if s.strip()]
@@ -560,6 +587,7 @@ def route_extracted_skills(raw_skills_text):
 
     st.session_state.parsed_known_skills = known_matches
     st.session_state.parsed_custom_skills = ", ".join(custom_matches)
+
 
 def render_radar_chart(selected_role, required_skills, skill_proficiency):
     categories = []
@@ -633,8 +661,6 @@ def render_radar_chart(selected_role, required_skills, skill_proficiency):
         ),
     ))
 
-    # A center marker makes an all-missing or single-match profile intentional,
-    # rather than looking like a broken radar spoke.
     if sum(value > 0 for value in user_values) <= 1:
         fig.add_trace(go.Scatterpolar(
             r=[0],
@@ -662,7 +688,7 @@ def render_radar_chart(selected_role, required_skills, skill_proficiency):
             angularaxis=dict(
                 gridcolor="rgba(255, 255, 255, 0.18)",
                 linecolor="rgba(0,0,0,0)",
-                tickfont=dict(color="#E2E8F0", size=13)
+                tickfont=dict(color="#E2E8F0", size=13),
             ),
             bgcolor="rgba(0,0,0,0)",
         ),
@@ -719,11 +745,13 @@ def render_radar_chart(selected_role, required_skills, skill_proficiency):
         )
         st.plotly_chart(bar_fig, use_container_width=True, config=chart_config)
 
+
 def format_gap_line(item):
     if isinstance(item, (tuple, list)) and len(item) == 2:
         req, weight = item
         return f"- {req} ({weight * 100:.0f}%)"
     return f"- {item}"
+
 
 def build_markdown_report(role, results, roadmap_text):
     lines = [
@@ -763,11 +791,7 @@ def build_markdown_report(role, results, roadmap_text):
 
     return "\n".join(lines)
 
-# ---------------------------------------------------------------------------
-# Step 2.5 async loader: a small HTML/JS component that keeps animating in
-# the browser (via its own iframe + setInterval) even while the main
-# Streamlit script is blocked on a synchronous LLM call below it.
-# ---------------------------------------------------------------------------
+
 def render_loading_component():
     facts_json = json.dumps(FUN_FACTS)
     html_code = f"""
@@ -785,7 +809,6 @@ def render_loading_component():
     </style>
     <script>
       const facts = {facts_json};
-      // Fisher-Yates shuffle so the order is fresh on every load.
       for (let i = facts.length - 1; i > 0; i--) {{
         const j = Math.floor(Math.random() * (i + 1));
         [facts[i], facts[j]] = [facts[j], facts[i]];
@@ -803,6 +826,7 @@ def render_loading_component():
     </script>
     """
     components.html(html_code, height=200)
+
 
 def inject_global_css():
     st.markdown(
@@ -831,10 +855,6 @@ def inject_global_css():
             70%  { box-shadow: 0 0 0 16px rgba(45,212,191,0); }
             100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
         }
-        /* Targets the button immediately following the .pulse-anchor marker div.
-           Relies on :has(), supported in modern Chromium/Safari/Firefox builds
-           used by Streamlit's hosted browsers; degrades gracefully (no pulse,
-           button still fully functional) on older browsers. */
         div[data-testid="element-container"]:has(> div.pulse-anchor)
           + div[data-testid="element-container"] button {
             animation: pulse-glow 1.8s infinite;
@@ -848,14 +868,12 @@ def inject_global_css():
             margin-bottom: 0.2rem;
         }
 
-        /* Dim and blur all un-focused Streamlit containers when a tour-focus element exists */
         .main .block-container:has(.tour-focus) > div {
             opacity: 0.25;
             filter: blur(2px);
             pointer-events: none;
             transition: all 0.5s ease;
         }
-        /* Keep the active focused container bright, scaled, and glowing */
         .main .block-container > div:has(.tour-focus) {
             opacity: 1.0 !important;
             filter: none !important;
@@ -870,6 +888,7 @@ def inject_global_css():
         """,
         unsafe_allow_html=True,
     )
+
 
 def init_session_state():
     defaults = {
@@ -894,14 +913,13 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+
 def reset_app():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     init_session_state()
 
-# ---------------------------------------------------------------------------
-# Step 0 — Onboarding
-# ---------------------------------------------------------------------------
+
 def render_step0():
     st.markdown(
         "<style>[data-testid='stSidebar'], [data-testid='collapsedControl'] {display:none;}</style>",
@@ -952,9 +970,7 @@ def render_step0():
             st.session_state.step = 1
             st.rerun()
 
-# ---------------------------------------------------------------------------
-# Step 1 — Data gathering (resume OR manual) + LeetCode (1.5)
-# ---------------------------------------------------------------------------
+
 def render_step1():
     st.markdown('<p class="step-caption">Step 2 of 4 · Data Gathering</p>', unsafe_allow_html=True)
     st.progress(0.25)
@@ -1003,7 +1019,7 @@ def render_step1():
             st.session_state.parsed_known_skills + parse_custom_skills(extra_skills_raw)
         ))
 
-    else:  # manual mode
+    else:
         selected_skills = st.multiselect(
             "Your current skills",
             options=ALL_TECH_SKILLS,
@@ -1076,9 +1092,7 @@ def render_step1():
                 st.session_state.step = 2
                 st.rerun()
 
-# ---------------------------------------------------------------------------
-# Step 2 — Target role + analysis trigger
-# ---------------------------------------------------------------------------
+
 def render_step2():
     st.markdown('<p class="step-caption">Step 3 of 4 · Target Role</p>', unsafe_allow_html=True)
     st.progress(0.55)
@@ -1114,9 +1128,7 @@ def render_step2():
         st.session_state.step = 3
         st.rerun()
 
-# ---------------------------------------------------------------------------
-# Step 3 — Processing (async fun-fact loader + AI calls)
-# ---------------------------------------------------------------------------
+
 def render_step3():
     st.markdown('<p class="step-caption">Step 4 of 4 · Analysis</p>', unsafe_allow_html=True)
     st.progress(0.85)
@@ -1180,13 +1192,9 @@ def render_step3():
         """,
         unsafe_allow_html=True,
     )
-    # Render results immediately in this same run, rather than st.rerun(),
-    # so the balloons/audio triggered above and the report land in one paint.
     render_step4()
 
-# ---------------------------------------------------------------------------
-# Step 4 — Results: Gap Analysis + Interactive Tabbed Roadmap
-# ---------------------------------------------------------------------------
+
 def render_step4():
     results = st.session_state.get("last_results")
     if results is None:
@@ -1287,9 +1295,7 @@ def render_step4():
             reset_app()
             st.rerun()
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+
 st.set_page_config(page_title="SkillGap Intelligence", page_icon=None, layout="wide")
 inject_global_css()
 init_session_state()
