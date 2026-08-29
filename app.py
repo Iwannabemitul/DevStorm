@@ -1,894 +1,114 @@
+"""
+SkillGap Intelligence -- Round 2
+
+Architecture:
+    data/catalog.py            Static job-role + skill-catalog reference data.
+    services/schema.py         Pydantic contracts for every LLM output / external payload.
+    services/llm_engine.py     Singleton, resilient multi-provider LLM router + JSON repair.
+    services/external_apis.py  LeetCode + GitHub verification (pure I/O, no Streamlit).
+    services/resume_parser.py  Deterministic text extraction + skill-catalog mapping.
+    services/analysis_service.py  Prompt construction + orchestration glue.
+    ui/styles.py, ui/charts.py, ui/report.py   Presentation-only helpers.
+    app.py (this file)         Session-state step machine + Streamlit caching only.
+
+app.py deliberately contains no prompt strings, no JSON parsing, and no
+`requests` calls -- if it needs to talk to an LLM or a third-party API, it
+goes through a cached wrapper around a services/ function.
+"""
 import streamlit as st
-import streamlit.components.v1 as components
-import google.generativeai as genai
-import PyPDF2
-import io
-import json
-import requests
-import plotly.graph_objects as go
-from openai import OpenAI
 
-JOB_DATA = {
-    "job_roles": {
-        # --- Core Software Engineering ---
-        "Software Engineer": {
-            "required_skills": ["Data Structures & Algorithms", "Python/Java/C++", "Git & Version Control", "System Design", "Debugging & Testing", "Object-Oriented Design", "Code Review Practices", "Unit Testing"],
-            "experience_level": "Entry to Senior"
-        },
-        "Full Stack Developer": {
-            "required_skills": ["JavaScript", "React", "Node.js", "SQL", "REST APIs", "Git & Version Control", "System Design", "CI/CD Pipelines"],
-            "experience_level": "Entry to Senior"
-        },
-        "Backend Developer": {
-            "required_skills": ["Python/Java/Node.js", "SQL & NoSQL Databases", "REST APIs", "Microservices", "System Design", "Docker", "Git & Version Control", "Debugging & Testing"],
-            "experience_level": "Entry to Senior"
-        },
-        "Frontend Developer": {
-            "required_skills": ["HTML", "CSS", "JavaScript", "React/Vue.js/Angular", "Responsive Design", "Web Accessibility", "Git & Version Control", "Browser DevTools"],
-            "experience_level": "Entry to Senior"
-        },
-
-        # --- Data ---
-        "Data Scientist": {
-            "required_skills": ["Python/R", "Statistics & Probability", "Machine Learning", "SQL", "Data Visualization", "Pandas", "Data Cleaning & Wrangling", "Experiment Design"],
-            "experience_level": "Mid to Senior"
-        },
-        "Data Engineer": {
-            "required_skills": ["Python/Scala", "SQL", "ETL Pipelines", "Apache Spark", "Data Warehousing", "Airflow", "Cloud Platforms (AWS/Azure/GCP)", "Data Modeling"],
-            "experience_level": "Mid to Senior"
-        },
-        "Data Analyst": {
-            "required_skills": ["SQL", "Excel", "Data Visualization", "Statistics & Probability", "Python/R", "Business Intelligence Tools", "Dashboarding", "Data Cleaning & Wrangling"],
-            "experience_level": "Entry to Mid"
-        },
-
-        # --- AI / Machine Learning ---
-        "AI Engineer": {
-            "required_skills": ["Python", "Machine Learning", "Deep Learning", "TensorFlow/PyTorch", "Model Deployment", "MLOps", "Prompt Engineering", "Cloud Platforms (AWS/Azure/GCP)"],
-            "experience_level": "Mid to Senior"
-        },
-        "Machine Learning Engineer": {
-            "required_skills": ["Python", "TensorFlow/PyTorch", "Feature Engineering", "Model Training & Tuning", "MLOps", "Distributed Computing", "SQL", "Statistics & Probability"],
-            "experience_level": "Mid to Senior"
-        },
-        "MLOps Engineer": {
-            "required_skills": ["CI/CD Pipelines", "Docker & Kubernetes", "Model Monitoring", "Cloud Platforms (AWS/Azure/GCP)", "Python", "MLflow/Kubeflow", "Infrastructure as Code (Terraform)", "Version Control for ML (DVC)"],
-            "experience_level": "Mid to Senior"
-        },
-        "NLP Engineer": {
-            "required_skills": ["Python", "Transformers", "Natural Language Processing", "Tokenization & Embeddings", "PyTorch/TensorFlow", "Large Language Models", "Text Preprocessing", "Model Fine-Tuning"],
-            "experience_level": "Mid to Senior"
-        },
-        "Computer Vision Engineer": {
-            "required_skills": ["Python", "OpenCV", "Deep Learning", "Convolutional Neural Networks", "Image Processing", "PyTorch/TensorFlow", "Object Detection", "Model Optimization"],
-            "experience_level": "Mid to Senior"
-        },
-        "Robotics Engineer": {
-            "required_skills": ["C++/Python", "ROS (Robot Operating System)", "Control Systems", "Sensor Fusion", "Kinematics", "Embedded Systems", "Path Planning", "Computer Vision"],
-            "experience_level": "Mid to Senior"
-        },
-
-        # --- Hardware & Systems ---
-        "Embedded Systems Engineer": {
-            "required_skills": ["C/C++", "Microcontrollers (ARM/AVR)", "RTOS", "Sensor Integration", "Circuit Debugging", "UART/SPI/I2C Protocols", "Firmware Development", "Low-Power Design"],
-            "experience_level": "Mid to Senior"
-        },
-        "IoT Architect": {
-            "required_skills": ["MQTT/CoAP Protocols", "Embedded Systems", "Cloud Platforms (AWS/Azure/GCP)", "Edge Computing", "Sensor Networks", "Network Security", "System Design", "Device Provisioning"],
-            "experience_level": "Mid to Senior"
-        },
-        "Firmware Engineer": {
-            "required_skills": ["C/C++", "Microcontrollers (ARM/AVR)", "Bootloader Development", "Debugging Tools (JTAG)", "RTOS", "Hardware Datasheets", "Version Control", "Power Management"],
-            "experience_level": "Mid to Senior"
-        },
-        "Hardware Design Engineer": {
-            "required_skills": ["Circuit Design", "PCB Layout", "VHDL/Verilog", "Signal Integrity", "Schematic Capture Tools", "Embedded Systems", "Testing & Validation", "Datasheet Analysis"],
-            "experience_level": "Mid to Senior"
-        },
-        "Systems Optimization Engineer": {
-            "required_skills": ["C/C++", "Operating Systems Internals", "Performance Profiling", "Memory Management", "Concurrency & Multithreading", "Linux Administration", "Debugging Tools", "Benchmarking"],
-            "experience_level": "Mid to Senior"
-        },
-
-        # --- Mobile ---
-        "Android Developer": {
-            "required_skills": ["Kotlin/Java", "Android SDK", "Jetpack Compose", "REST APIs", "SQLite/Room", "Git & Version Control", "Material Design", "App Performance Optimization"],
-            "experience_level": "Entry to Senior"
-        },
-        "iOS Developer": {
-            "required_skills": ["Swift", "UIKit/SwiftUI", "Xcode", "REST APIs", "Core Data", "Git & Version Control", "App Store Guidelines", "Memory Management"],
-            "experience_level": "Entry to Senior"
-        },
-
-        # --- Game Development ---
-        "Game Developer": {
-            "required_skills": ["C++/C#", "Unity/Unreal Engine", "Game Physics", "3D Math", "Shader Programming", "Version Control (Git/Perforce)", "Performance Optimization", "Multiplayer Networking"],
-            "experience_level": "Entry to Senior"
-        },
-        "Game Designer": {
-            "required_skills": ["Game Design Documentation", "Level Design", "Prototyping Tools", "Player Psychology", "Balancing & Economy Design", "Scripting (C#/Lua)", "Playtesting", "Storytelling"],
-            "experience_level": "Entry to Mid"
-        },
-
-        # --- Cloud & Infrastructure ---
-        "Cloud Architect": {
-            "required_skills": ["AWS/Azure/GCP", "Infrastructure as Code (Terraform)", "Networking Fundamentals", "Cloud Security", "Cost Optimization", "Kubernetes", "Disaster Recovery Planning", "System Design"],
-            "experience_level": "Mid to Senior"
-        },
-        "DevOps Engineer": {
-            "required_skills": ["CI/CD Pipelines", "Docker & Kubernetes", "Cloud Platforms (AWS/Azure/GCP)", "Infrastructure as Code (Terraform)", "Linux Administration", "Monitoring & Logging", "Scripting (Python/Bash)", "Configuration Management (Ansible)"],
-            "experience_level": "Mid to Senior"
-        },
-        "Site Reliability Engineer": {
-            "required_skills": ["Linux Administration", "Monitoring & Alerting (Prometheus/Grafana)", "Incident Response", "CI/CD Pipelines", "Kubernetes", "Scripting (Python/Bash)", "Capacity Planning", "System Design"],
-            "experience_level": "Mid to Senior"
-        },
-
-        # --- Cybersecurity ---
-        "Cybersecurity Analyst": {
-            "required_skills": ["Network Security", "Threat Detection & Response", "Penetration Testing", "SIEM Tools", "Risk Assessment", "Incident Response", "Security Policies & Compliance", "Vulnerability Management"],
-            "experience_level": "Entry to Senior"
-        },
-        "Penetration Tester": {
-            "required_skills": ["Network Security", "Penetration Testing", "Vulnerability Assessment", "Exploit Development", "Scripting (Python/Bash)", "Web Application Security", "Social Engineering Awareness", "Reporting & Documentation"],
-            "experience_level": "Mid to Senior"
-        },
-        "Security Engineer": {
-            "required_skills": ["Network Security", "Cloud Security", "SIEM Tools", "Identity & Access Management", "Threat Modeling", "Incident Response", "Encryption & Cryptography", "Risk Assessment"],
-            "experience_level": "Mid to Senior"
-        },
-
-        # --- Web3 / Blockchain ---
-        "Blockchain Developer": {
-            "required_skills": ["Solidity", "Smart Contract Development", "Ethereum/EVM", "Web3.js/Ethers.js", "Cryptography Fundamentals", "Consensus Mechanisms", "Gas Optimization", "Security Auditing"],
-            "experience_level": "Mid to Senior"
-        },
-        "Web3 Engineer": {
-            "required_skills": ["Solidity", "Smart Contracts", "Decentralized Applications (dApps)", "IPFS", "Wallet Integration (MetaMask)", "Web3.js/Ethers.js", "Layer 2 Solutions", "Tokenomics"],
-            "experience_level": "Mid to Senior"
-        },
-
-        # --- Databases ---
-        "Database Administrator": {
-            "required_skills": ["SQL & NoSQL Databases", "Query Optimization", "Backup & Recovery", "Database Security", "Performance Tuning", "High Availability & Clustering", "Database Monitoring", "Capacity Planning"],
-            "experience_level": "Mid to Senior"
-        },
-        "Database Engineer": {
-            "required_skills": ["SQL & NoSQL Databases", "Database Design & Normalization", "Indexing Strategies", "Replication & Sharding", "Query Optimization", "Backup & Recovery", "Cloud Databases", "Data Migration"],
-            "experience_level": "Mid to Senior"
-        },
-
-        # --- QA ---
-        "QA Automation Engineer": {
-            "required_skills": ["Selenium/Playwright", "Test Case Design", "CI/CD Pipelines", "API Testing", "Scripting (Python/JavaScript)", "Bug Tracking Tools", "Performance Testing", "Test Strategy"],
-            "experience_level": "Entry to Mid"
-        },
-
-        # --- Product & Program Management ---
-        "Product Manager": {
-            "required_skills": ["Roadmap Planning", "Stakeholder Communication", "Market Research", "Agile/Scrum", "Data-Driven Decision Making", "Competitive Analysis", "User Story Writing", "Go-to-Market Strategy"],
-            "experience_level": "Mid to Senior"
-        },
-        "Technical Program Manager": {
-            "required_skills": ["Roadmap Planning", "Cross-Functional Coordination", "Risk Management", "Agile/Scrum", "Stakeholder Communication", "Resource Allocation", "Technical Fluency", "Program Metrics & Reporting"],
-            "experience_level": "Mid to Senior"
-        },
-
-        # --- Design ---
-        "UX/UI Designer": {
-            "required_skills": ["Wireframing & Prototyping", "Figma/Sketch/Adobe XD", "User Research", "Interaction Design", "Visual Design Principles", "Usability Testing", "Design Systems", "Accessibility Standards (WCAG)"],
-            "experience_level": "Entry to Senior"
-        },
-
-        # --- Marketing ---
-        "Digital Marketing Specialist": {
-            "required_skills": ["SEO/SEM", "Content Strategy", "Social Media Marketing", "Google Analytics", "Email Marketing Campaigns", "Paid Advertising (PPC)", "Conversion Rate Optimization", "Marketing Automation Tools"],
-            "experience_level": "Entry to Mid"
-        }
-    }
-}
-
-ALL_TECH_SKILLS = sorted([
-    "Python", "Java", "C++", "C#", "Go", "Rust", "JavaScript", "TypeScript",
-    "HTML", "CSS", "React", "Vue.js", "Angular", "Node.js", "Next.js",
-    "Django", "Flask", "FastAPI", "Spring Boot", "Ruby", "Ruby on Rails",
-    "PHP", "Swift", "Kotlin", "R",
-    "SQL", "MySQL", "PostgreSQL", "MongoDB", "Redis", "SQLite",
-    "SQL & NoSQL Databases", "Query Optimization", "Database Security",
-    "Backup & Recovery", "Performance Tuning",
-    "AWS", "Azure", "Google Cloud Platform", "Cloud Platforms (AWS/Azure/GCP)",
-    "Docker", "Kubernetes", "Docker & Kubernetes", "Terraform",
-    "Infrastructure as Code (Terraform)", "CI/CD Pipelines", "Jenkins",
-    "Linux Administration", "Git & Version Control", "GitHub Actions",
-    "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch",
-    "Scikit-learn", "Natural Language Processing", "Computer Vision",
-    "Data Visualization", "Statistics & Probability", "Pandas", "NumPy",
-    "Data Structures & Algorithms", "System Design", "Debugging & Testing",
-    "Cybersecurity", "Network Security", "Penetration Testing",
-    "Threat Detection & Response", "SIEM Tools", "Risk Assessment",
-    "Figma", "Sketch", "Adobe XD", "Wireframing & Prototyping",
-    "User Research", "Interaction Design", "Visual Design Principles",
-    "Agile", "Scrum", "Roadmap Planning", "Stakeholder Communication",
-    "Market Research", "Data-Driven Decision Making",
-    "SEO/SEM", "Content Strategy", "Social Media Marketing",
-    "Google Analytics", "Email Marketing Campaigns",
-    "GraphQL", "REST APIs", "Microservices", "Kafka", "RabbitMQ",
-])
-
-PROFICIENCY_OPTIONS = ["Beginner (0.4)", "Intermediate (0.8)", "Advanced (1.0)"]
-PROFICIENCY_WEIGHTS = {
-    "Beginner (0.4)": 0.4,
-    "Intermediate (0.8)": 0.8,
-    "Advanced (1.0)": 1.0,
-}
-
-FUN_FACTS = [
-    "🧠 The term 'bug' in computing traces back to an actual moth found in a Harvard Mark II relay in 1947.",
-    "🐍 Python was named after Monty Python's Flying Circus, not the snake.",
-    "🖱️ The first computer mouse prototype was carved out of wood.",
-    "⌨️ QWERTY was originally designed to slow typists down and stop mechanical typewriters from jamming.",
-    "🏦 More than 70% of the world's financial transactions still run on COBOL, a language from 1959.",
-    "⚡ JavaScript was originally written in just 10 days by Brendan Eich in 1995.",
-    "🚀 The Apollo 11 guidance computer had less RAM than a modern USB-C cable.",
-    "🔍 A single Google search reportedly draws more computing power than the entire Apollo 11 mission.",
-    "📷 The world's first webcam was built just to monitor a coffee pot at Cambridge University.",
-    "💾 The first 1GB hard drive, released in 1980, weighed about 550 pounds and cost $40,000.",
-    "🌐 The World Wide Web was originally proposed as a way to help physicists share documents at CERN.",
-    "🐛 Grace Hopper coined the term 'debugging' after physically removing that moth from a relay.",
-    "📧 The first email was sent in 1971, and its author doesn't remember exactly what it said.",
-    "🎮 The 'Konami Code' cheat sequence became so famous it's now used as an easter egg in web browsers.",
-    "🧮 The first computer 'programmer' is widely considered to be Ada Lovelace, in the 1840s.",
-    "📱 There are more mobile phones on Earth today than there are people.",
-    "🔤 The @ symbol was chosen for email addresses in 1971 simply because it was rarely used elsewhere.",
-    "🖥️ The original name for the Windows operating system was 'Interface Manager'.",
-    "🕹️ 'Space Invaders' was so popular in Japan it reportedly caused a national coin shortage.",
-    "🔐 The first computer password was created at MIT in the 1960s — and was reportedly leaked within weeks.",
-]
+from data.catalog import ALL_TECH_SKILLS, JOB_DATA, PROFICIENCY_OPTIONS, PROFICIENCY_WEIGHTS
+from services.analysis_service import (
+    ai_analyze_role,
+    extract_skills_via_llm,
+    generate_ai_roadmap,
+    legacy_analyze_role,
+)
+from services.external_apis import build_candidate_verification, fetch_github_stats, fetch_leetcode_stats
+from services.llm_engine import LLMEngine, LLMEngineError
+from services.resume_parser import (
+    extract_text_from_upload,
+    map_tokens_to_skill_catalog,
+    split_comma_list,
+)
+from services.schema import AnalysisResult, CandidateVerification, GitHubStats, LeetCodeStats, RoadmapResponse
+from ui.charts import render_radar_chart
+from ui.report import build_markdown_report, roadmap_to_markdown
+from ui.styles import inject_global_css, render_loading_component
 
 
-def parse_custom_skills(raw_text):
-    return [s.strip() for s in raw_text.split(",") if s.strip()]
+# --------------------------------------------------------------------------
+# Cached wrappers around service calls
+#
+# Every intensive / network-bound / paid service call is wrapped here with
+# @st.cache_data(ttl=3600, show_spinner=False). The LLMEngine instance is
+# passed with a leading underscore so Streamlit excludes it from the cache
+# key (it's a stateless router, not part of the "input"); everything else
+# is a plain, hashable primitive so caching is fully deterministic.
+# --------------------------------------------------------------------------
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_extract_text_from_upload(filename: str, file_bytes: bytes) -> str:
+    return extract_text_from_upload(filename, file_bytes)
 
 
-def llm_provider_configured():
-    return bool(st.secrets.get("GEMINI_API_KEY")) or bool(st.secrets.get("NVIDIA_API_KEY"))
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_extract_skills_via_llm(_engine: LLMEngine, resume_text: str):
+    return extract_skills_via_llm(_engine, resume_text)
 
 
-def call_llm_resilient(prompt):
-    errors = []
-
-    gemini_key = st.secrets.get("GEMINI_API_KEY")
-    if gemini_key:
-        try:
-            genai.configure(api_key=gemini_key)
-            available_models = [
-                m.name for m in genai.list_models()
-                if "generateContent" in m.supported_generation_methods
-            ]
-
-            candidate_priority = [
-                "models/gemini-3.6-flash",
-                "models/gemini-1.5-flash",
-                "models/gemini-1.5-pro",
-                "models/gemini-2.0-flash",
-                "models/gemini-pro"
-            ]
-
-            selected_model_name = None
-            for candidate in candidate_priority:
-                if candidate in available_models:
-                    selected_model_name = candidate
-                    break
-
-            if selected_model_name is None and available_models:
-                selected_model_name = available_models[0]
-
-            if selected_model_name is None:
-                raise RuntimeError("No Gemini models supporting generateContent are available.")
-
-            model = genai.GenerativeModel(selected_model_name)
-            response = model.generate_content(prompt)
-            text = (response.text or "").strip()
-            if text:
-                return text
-            raise RuntimeError("Gemini returned an empty response.")
-        except Exception as e:
-            errors.append(f"Gemini Error: {str(e)}")
-            print(f"Gemini call failed: {e}")
-
-    nvidia_key = st.secrets.get("NVIDIA_API_KEY")
-    if nvidia_key:
-        try:
-            client = OpenAI(
-                base_url="https://integrate.api.nvidia.com/v1",
-                api_key=nvidia_key,
-            )
-            completion = client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct-v2",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1500,
-                temperature=0.2,
-            )
-            text = (completion.choices[0].message.content or "").strip()
-            if text:
-                return text
-            raise RuntimeError("NVIDIA returned an empty response.")
-        except Exception as e:
-            errors.append(f"NVIDIA Error: {str(e)}")
-            print(f"NVIDIA fallback call failed: {e}")
-
-    if errors:
-        raise RuntimeError(" | ".join(errors))
-
-    return ""
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_fetch_leetcode_stats(username: str):
+    return fetch_leetcode_stats(username)
 
 
-def legacy_analyze_role(selected_role, skill_proficiency):
-    role_info = JOB_DATA["job_roles"][selected_role]
-    required_skills = role_info["required_skills"]
-    total_required = len(required_skills)
-
-    strong_matches = []
-    needs_improvement = []
-    critical_missing = []
-
-    earned_weight_sum = 0.0
-    covered_count = 0
-
-    for requirement in required_skills:
-        options = [opt.strip().lower() for opt in requirement.split("/")]
-        matched_weights = [
-            skill_proficiency[opt] for opt in options if opt in skill_proficiency
-        ]
-
-        if matched_weights:
-            best_weight = max(matched_weights)
-            earned_weight_sum += best_weight
-            covered_count += 1
-            if best_weight >= 0.8:
-                strong_matches.append((requirement, best_weight))
-            else:
-                needs_improvement.append((requirement, best_weight))
-        else:
-            critical_missing.append(requirement)
-
-    coverage_score = (covered_count / total_required * 100) if total_required else 0
-    readiness_score = (earned_weight_sum / total_required * 100) if total_required else 0
-
-    return {
-        "experience_level": role_info["experience_level"],
-        "total_required": total_required,
-        "coverage_score": coverage_score,
-        "readiness_score": readiness_score,
-        "strong_matches": strong_matches,
-        "needs_improvement": needs_improvement,
-        "critical_missing": critical_missing,
-    }
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_fetch_github_stats(username: str):
+    return fetch_github_stats(username)
 
 
-def ai_analyze_role(
-    target_role,
-    required_skills,
-    all_user_skills,
-    skill_proficiencies,
-    leetcode_stats=None,
-):
-    proficiency_lines = ", ".join(
-        f"{skill} ({weight * 100:.0f}% proficiency)"
-        for skill, weight in skill_proficiencies.items()
-    ) or "none provided"
-
-    if leetcode_stats:
-        leetcode_context = (
-            f"The candidate's LeetCode profile ('{leetcode_stats.get('username', 'unknown')}') shows "
-            f"{leetcode_stats.get('easy', 0)} Easy, {leetcode_stats.get('medium', 0)} Medium, and "
-            f"{leetcode_stats.get('hard', 0)} Hard problems solved ({leetcode_stats.get('total', 0)} total). "
-            "Treat this as verified, ground-truth evidence of the candidate's real Data Structures & "
-            "Algorithms / problem-solving ability. Where this signal disagrees with their self-reported "
-            "proficiency for DSA-adjacent skills, trust the LeetCode evidence over the self-report "
-            "(e.g. a strong Medium/Hard solve count should upgrade an under-rated self-assessment, and a "
-            "very low solve count should temper an inflated one)."
-        )
-    else:
-        leetcode_context = "No verified LeetCode data was provided; rely on self-reported proficiency only."
-
-    prompt = (
-        "Act as a Senior Technical Recruiter. Semantically evaluate a candidate's skills against "
-        f"the required skills for the target role of {target_role}. "
-        f"Required skills for this role: {required_skills}. "
-        f"Candidate's stated skills: {all_user_skills}. "
-        f"Candidate's proficiency levels: {proficiency_lines}. "
-        f"{leetcode_context} "
-        "Do not rely on exact string matching. If the candidate has an advanced or adjacent skill "
-        "that demonstrates competence in a required skill (for example, knowing PyTorch implies "
-        "competence in Feature Engineering or Machine Learning), credit them for it and note the "
-        "inference in parentheses. "
-        "Return ONLY a raw JSON string matching this exact schema, with no markdown formatting, "
-        "no backticks, and no extra text before or after it: "
-        '{"readiness_score": 85, "coverage_score": 90, "experience_level_assessment": '
-        '"Mid to Senior", "strong_matches": ["Python (Advanced)", "Machine Learning (via PyTorch)"], '
-        '"needs_improvement": ["Docker (Beginner)"], "critical_missing": ["Cloud Architecture"]}'
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_ai_analyze_role(
+    _engine: LLMEngine,
+    target_role: str,
+    required_skills: tuple,
+    all_user_skills: tuple,
+    skill_proficiencies_items: tuple,
+    verification_json: str,
+) -> AnalysisResult:
+    verification = CandidateVerification.model_validate_json(verification_json)
+    return ai_analyze_role(
+        _engine,
+        target_role,
+        list(required_skills),
+        list(all_user_skills),
+        dict(skill_proficiencies_items),
+        verification,
     )
 
-    raw_text = call_llm_resilient(prompt)
-    if not raw_text:
-        raise RuntimeError("No AI provider returned a response.")
 
-    if raw_text.startswith("```"):
-        raw_text = raw_text.strip("`")
-        if raw_text.lower().startswith("json"):
-            raw_text = raw_text[4:]
-        raw_text = raw_text.strip()
-
-    parsed = json.loads(raw_text)
-
-    return {
-        "experience_level": parsed["experience_level_assessment"],
-        "total_required": len(required_skills),
-        "coverage_score": parsed["coverage_score"],
-        "readiness_score": parsed["readiness_score"],
-        "strong_matches": parsed["strong_matches"],
-        "needs_improvement": parsed["needs_improvement"],
-        "critical_missing": parsed["critical_missing"],
-    }
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_generate_ai_roadmap(
+    _engine: LLMEngine,
+    target_role: str,
+    user_skills: tuple,
+    missing_skills: tuple,
+) -> RoadmapResponse:
+    return generate_ai_roadmap(_engine, target_role, list(user_skills), list(missing_skills))
 
 
-def generate_ai_roadmap(target_role, user_skills, missing_skills):
-    prompt = (
-        f"Act as a Senior Tech Recruiter and Mentor. The user wants to be a {target_role}. "
-        f"They currently know {user_skills} with varying proficiencies. "
-        f"They are completely missing these critical skills: {missing_skills}. "
-        "Design a highly specific, no-nonsense 4-week learning roadmap to close this gap. "
-        "Do not use generic filler like 'learn X' — every task should reference a concrete "
-        "project, exercise, or resource type. "
-        "Return ONLY a raw JSON object with no code fences and no extra text before or after it. "
-        "It must match exactly this schema: "
-        '{"weeks": [{"week_title": "Week 1: Fundamentals", "tasks": ["Task 1", "Task 2"]}]}. '
-        "Include exactly 4 week objects, each with 3 to 5 concise, actionable tasks. "
-        "CRITICAL: Every single task in the 'tasks' array MUST contain a clickable Markdown "
-        "hyperlink pointing to a YouTube search query for that specific skill. Format the URL as "
-        "[https://www.youtube.com/results?search_query=TOPIC+NAME+tutorial]"
-        "(https://www.youtube.com/results?search_query=TOPIC+NAME+tutorial) "
-        "(replace spaces with +). Example format for a task string inside the JSON: "
-        "\"Build a basic CRUD app using [FastAPI]"
-        "(https://www.youtube.com/results?search_query=FastAPI+tutorial) connected to a local "
-        "SQLite database.\" "
-        "CRITICAL: You must return valid, parseable JSON. Do NOT use double quotes inside "
-        "your string values. Use single quotes for inner text (e.g., 'Learn Python' instead "
-        'of "Learn Python"). Ensure all commas and brackets are perfectly formatted.'
+def get_llm_engine() -> LLMEngine:
+    engine = LLMEngine.get_instance()
+    engine.configure(
+        gemini_api_key=st.secrets.get("GEMINI_API_KEY"),
+        nvidia_api_key=st.secrets.get("NVIDIA_API_KEY"),
     )
-    return call_llm_resilient(prompt)
+    return engine
 
 
-def parse_roadmap_json(raw_text):
-    if not raw_text:
-        raise ValueError("Empty roadmap response from AI provider.")
-
-    cleaned = raw_text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start == -1 or end == -1 or end < start:
-        raise ValueError("No JSON object found in the roadmap response.")
-    json_slice = cleaned[start:end + 1]
-
-    parsed = json.loads(json_slice)
-    weeks = parsed.get("weeks")
-    if not isinstance(weeks, list) or not weeks:
-        raise ValueError("Roadmap JSON did not contain a non-empty 'weeks' list.")
-
-    normalized_weeks = []
-    for i, week in enumerate(weeks):
-        title = str(week.get("week_title") or f"Week {i + 1}").strip()
-        raw_tasks = week.get("tasks") or []
-        tasks = [str(t).strip() for t in raw_tasks if str(t).strip()]
-        normalized_weeks.append({"week_title": title, "tasks": tasks})
-
-    return {"weeks": normalized_weeks}
-
-
-def roadmap_weeks_to_markdown(roadmap):
-    """Build export Markdown without escaping task text, preserving inline links."""
-    if not roadmap or not roadmap.get("weeks"):
-        return "_No AI roadmap was generated for this assessment._"
-
-    lines = []
-    for week in roadmap["weeks"]:
-        lines.append(f"### {week['week_title']}")
-        for task in week["tasks"]:
-            lines.append(f"- [ ] {task}")
-        lines.append("")
-
-    return "\n".join(lines).strip()
-
-
-def fetch_leetcode_stats(username):
-    username = (username or "").strip()
-    if not username:
-        st.warning("Enter a LeetCode username first.")
-        return None
-
-    url = f"https://alfa-leetcode-api.onrender.com/{username}/solved"
-    try:
-        response = requests.get(url, timeout=8)
-    except requests.exceptions.Timeout:
-        st.warning("LeetCode API timed out. Continuing without verified coding stats.")
-        return None
-    except requests.exceptions.RequestException as e:
-        st.warning(f"Could not reach the LeetCode API: {e}")
-        return None
-
-    if response.status_code == 404:
-        st.warning(f"LeetCode username '{username}' was not found. Continuing without it.")
-        return None
-    if response.status_code == 429:
-        st.toast("API Rate limited. Using Demo Profile for showcase.", icon="⚠️")
-        return {"username": username, "easy": 45, "medium": 120, "hard": 15, "total": 180}
-    if response.status_code != 200:
-        st.warning(
-            f"LeetCode API returned an unexpected status ({response.status_code}). "
-            "Continuing without it."
-        )
-        return None
-
-    try:
-        data = response.json()
-    except ValueError:
-        st.warning("LeetCode API returned an unreadable response. Continuing without it.")
-        return None
-
-    stats = {
-        "username": username,
-        "easy": data.get("easySolved", 0),
-        "medium": data.get("mediumSolved", 0),
-        "hard": data.get("hardSolved", 0),
-        "total": data.get("solvedProblem", 0),
-    }
-    st.toast(f"Verified {stats['total']} solved problems for '{username}'!", icon="🏆")
-    return stats
-
-
-def extract_skills_from_resume(text):
-    prompt = (
-        "Extract all technical skills, programming languages, and frameworks from the "
-        "following resume text. Return ONLY a comma-separated list of skills. Do not "
-        f"include any other text, pleasantries, or markdown formatting. Text: {text}"
-    )
-    return call_llm_resilient(prompt)
-
-
-def extract_text_from_resume_file(uploaded_file):
-    if uploaded_file.name.lower().endswith(".pdf"):
-        reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.getvalue()))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    return uploaded_file.getvalue().decode("utf-8", errors="ignore")
-
-
-def route_extracted_skills(raw_skills_text):
-    extracted = [s.strip() for s in raw_skills_text.split(",") if s.strip()]
-    lookup = {skill.lower(): skill for skill in ALL_TECH_SKILLS}
-
-    known_matches = []
-    custom_matches = []
-
-    for skill in extracted:
-        canonical = lookup.get(skill.lower())
-        if canonical:
-            if canonical not in known_matches:
-                known_matches.append(canonical)
-        else:
-            if skill not in custom_matches:
-                custom_matches.append(skill)
-
-    st.session_state.parsed_known_skills = known_matches
-    st.session_state.parsed_custom_skills = ", ".join(custom_matches)
-
-
-def render_radar_chart(selected_role, required_skills, skill_proficiency):
-    categories = []
-    user_values = []
-
-    for requirement in required_skills:
-        label = requirement.split("/")[0].strip()
-        categories.append(label)
-
-        options = [opt.strip().lower() for opt in requirement.split("/")]
-        matched_weights = [skill_proficiency[opt] for opt in options if opt in skill_proficiency]
-        user_values.append(max(matched_weights) if matched_weights else 0.0)
-
-    if not categories:
-        return
-
-    categories_closed = categories + [categories[0]]
-    user_values_closed = user_values + [user_values[0]]
-    baseline_values_closed = [1.0] * len(categories_closed)
-
-    def proficiency_label(value):
-        labels = {
-            0.0: "None (0%)",
-            0.4: "Beginner (40%)",
-            0.8: "Intermediate (80%)",
-            1.0: "Advanced (100%)",
-        }
-        return labels.get(value, f"{value * 100:.0f}%")
-
-    current_levels_closed = [proficiency_label(value) for value in user_values_closed]
-    hover_data = list(zip(categories_closed, current_levels_closed))
-    chart_config = {
-        "displayModeBar": False,
-        "staticPlot": False,
-        "scrollZoom": False,
-    }
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatterpolar(
-        r=baseline_values_closed,
-        theta=categories_closed,
-        name="Role Baseline",
-        mode="lines+markers",
-        line=dict(color="rgba(156, 163, 175, 0.5)", dash="dash"),
-        marker=dict(size=7, color="rgba(156, 163, 175, 0.9)"),
-        fill="toself",
-        fillcolor="rgba(156, 163, 175, 0.05)",
-        customdata=hover_data,
-        hovertemplate=(
-            "<b>%{customdata[0]}</b><br>"
-            "Your current level: %{customdata[1]}<br>"
-            "Required: 100%<extra>Role baseline</extra>"
-        ),
-    ))
-
-    fig.add_trace(go.Scatterpolar(
-        r=user_values_closed,
-        theta=categories_closed,
-        name="Your Profile",
-        mode="lines+markers",
-        line=dict(color="#2DD4BF", width=3),
-        marker=dict(size=9, color="#2DD4BF", line=dict(color="#FFFFFF", width=1)),
-        fill="toself",
-        fillcolor="rgba(45, 212, 191, 0.4)",
-        customdata=hover_data,
-        hovertemplate=(
-            "<b>%{customdata[0]}</b><br>"
-            "Your current level: %{customdata[1]}<br>"
-            "Required: 100%<extra>Your profile</extra>"
-        ),
-    ))
-
-    if sum(value > 0 for value in user_values) <= 1:
-        fig.add_trace(go.Scatterpolar(
-            r=[0],
-            theta=[categories[0]],
-            mode="markers",
-            marker=dict(size=8, color="rgba(45, 212, 191, 0.65)"),
-            hoverinfo="skip",
-            showlegend=False,
-        ))
-
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 1.0],
-                tickvals=[0, 0.4, 0.8, 1.0],
-                ticktext=["0%", "40% (Beginner)", "80% (Intermediate)", "100% (Advanced)"],
-                ticks="",
-                gridcolor="rgba(255, 255, 255, 0.28)",
-                gridwidth=1,
-                linecolor="rgba(0,0,0,0)",
-                color="#CBD5E1",
-                tickfont=dict(size=11),
-            ),
-            angularaxis=dict(
-                gridcolor="rgba(255, 255, 255, 0.18)",
-                linecolor="rgba(0,0,0,0)",
-                tickfont=dict(color="#E2E8F0", size=13),
-            ),
-            bgcolor="rgba(0,0,0,0)",
-        ),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#FAFAFA"),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.15, xanchor="center", x=0.5),
-        title=dict(text=f"Skill Profile vs. {selected_role} Baseline", x=0.5, font=dict(size=16)),
-        margin=dict(t=80, b=20),
-        dragmode=False,
-    )
-
-    st.plotly_chart(fig, use_container_width=True, config=chart_config)
-
-    with st.expander("Skill Fulfillment Bar Chart", expanded=True):
-        st.caption("Each bar shows how closely your current level meets the 100% requirement.")
-        fulfillment_percentages = [value * 100 for value in user_values]
-        bar_colors = [
-            "#22C55E" if value >= 80 else "#EAB308" if value >= 40 else "#EF4444"
-            for value in fulfillment_percentages
-        ]
-
-        bar_fig = go.Figure(go.Bar(
-            x=fulfillment_percentages,
-            y=categories,
-            orientation="h",
-            marker_color=bar_colors,
-            text=[f"{value:.0f}%" for value in fulfillment_percentages],
-            textposition="auto",
-            customdata=hover_data[:-1],
-            hovertemplate=(
-                "<b>%{customdata[0]}</b><br>"
-                "Your current level: %{customdata[1]}<br>"
-                "Required: 100%<extra></extra>"
-            ),
-        ))
-        bar_fig.update_layout(
-            xaxis=dict(
-                title="Fulfillment of role requirement",
-                range=[0, 100],
-                ticksuffix="%",
-                tickvals=[0, 40, 80, 100],
-                gridcolor="rgba(255, 255, 255, 0.15)",
-            ),
-            yaxis=dict(autorange="reversed"),
-            height=max(260, len(categories) * 48),
-            margin=dict(l=20, r=30, t=20, b=45),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#FAFAFA"),
-            showlegend=False,
-            dragmode=False,
-        )
-        st.plotly_chart(bar_fig, use_container_width=True, config=chart_config)
-
-
-def format_gap_line(item):
-    if isinstance(item, (tuple, list)) and len(item) == 2:
-        req, weight = item
-        return f"- {req} ({weight * 100:.0f}%)"
-    return f"- {item}"
-
-
-def build_markdown_report(role, results, roadmap_text):
-    lines = [
-        f"# SkillGap Assessment Report: {role}",
-        "",
-        f"**Experience Level:** {results['experience_level']}",
-        "",
-        f"**Role Readiness:** {results['readiness_score']:.0f}%",
-        f"**Skill Coverage:** {results['coverage_score']:.0f}%",
-        "",
-        "## Strong Matches",
-    ]
-
-    if results["strong_matches"]:
-        lines.extend(format_gap_line(item) for item in results["strong_matches"])
-    else:
-        lines.append("- None yet.")
-
-    lines.append("")
-    lines.append("## Needs Improvement")
-    if results["needs_improvement"]:
-        lines.extend(format_gap_line(item) for item in results["needs_improvement"])
-    else:
-        lines.append("- Nothing stuck at Beginner level.")
-
-    lines.append("")
-    lines.append("## Critical Gaps")
-    if results["critical_missing"]:
-        lines.extend(f"- {req}" for req in results["critical_missing"])
-    else:
-        lines.append("- None. Full coverage.")
-
-    lines.append("")
-    lines.append("## 4-Week AI Roadmap")
-    lines.append("")
-    lines.append(roadmap_text if roadmap_text else "_No AI roadmap was generated for this assessment._")
-
-    return "\n".join(lines)
-
-
-def render_loading_component():
-    facts_json = json.dumps(FUN_FACTS)
-    html_code = f"""
-    <div id="loader-wrap" style="display:flex;flex-direction:column;align-items:center;
-         justify-content:center;padding:40px 16px;font-family:sans-serif;">
-      <div class="spinner" style="width:56px;height:56px;border:5px solid rgba(45,212,191,0.15);
-           border-top-color:#2DD4BF;border-radius:50%;animation:spin 0.9s linear infinite;"></div>
-      <p id="fun-fact-text" style="margin-top:20px;color:#E2E8F0;font-size:15px;text-align:center;
-         max-width:480px;transition:opacity 0.4s ease;opacity:1;">
-         Warming up the analysis engine...
-      </p>
-    </div>
-    <style>
-      @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
-    </style>
-    <script>
-      const facts = {facts_json};
-      for (let i = facts.length - 1; i > 0; i--) {{
-        const j = Math.floor(Math.random() * (i + 1));
-        [facts[i], facts[j]] = [facts[j], facts[i]];
-      }}
-      const el = document.getElementById('fun-fact-text');
-      setInterval(() => {{
-        if (!el) return;
-        el.style.opacity = 0;
-        setTimeout(() => {{
-          const idx = Math.floor(Math.random() * facts.length);
-          el.innerText = facts[idx];
-          el.style.opacity = 1;
-        }}, 400);
-      }}, 2500);
-    </script>
-    """
-    components.html(html_code, height=200)
-
-
-def inject_global_css():
-    st.markdown(
-        """
-        <style>
-        .onboard-card {
-            padding: 2.2rem 1.6rem;
-            border-radius: 18px;
-            background: linear-gradient(145deg, rgba(45,212,191,0.08), rgba(255,255,255,0.02));
-            border: 1px solid rgba(255,255,255,0.10);
-            text-align: center;
-            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-            height: 100%;
-        }
-        .onboard-card:hover {
-            transform: scale(1.02);
-            box-shadow: 0 14px 40px rgba(45,212,191,0.25);
-            border-color: rgba(45,212,191,0.55);
-        }
-        .onboard-icon { font-size: 3rem; margin-bottom: 0.6rem; }
-        .onboard-title { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.4rem; }
-        .onboard-desc { color: rgba(230,238,245,0.75); font-size: 0.95rem; }
-
-        @keyframes pulse-glow {
-            0%   { box-shadow: 0 0 0 0 rgba(45,212,191,0.65); }
-            70%  { box-shadow: 0 0 0 16px rgba(45,212,191,0); }
-            100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
-        }
-        div[data-testid="element-container"]:has(> div.pulse-anchor)
-          + div[data-testid="element-container"] button {
-            animation: pulse-glow 1.8s infinite;
-            border: 1px solid #2DD4BF !important;
-        }
-        .step-caption {
-            color: rgba(230,238,245,0.6);
-            font-size: 0.8rem;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            margin-bottom: 0.2rem;
-        }
-
-        .main .block-container:has(.tour-focus) > div {
-            opacity: 0.25;
-            filter: blur(2px);
-            pointer-events: none;
-            transition: all 0.5s ease;
-        }
-        .main .block-container > div:has(.tour-focus) {
-            opacity: 1.0 !important;
-            filter: none !important;
-            pointer-events: auto;
-            transform: scale(1.02);
-            border-radius: 12px;
-            box-shadow: 0px 0px 30px rgba(45, 212, 191, 0.15);
-            padding: 15px;
-            z-index: 999;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
+# --------------------------------------------------------------------------
+# Session state
+# --------------------------------------------------------------------------
 
 def init_session_state():
     defaults = {
@@ -899,6 +119,7 @@ def init_session_state():
         "all_user_skills": [],
         "skill_proficiency": {},
         "leetcode_stats": None,
+        "github_stats": None,
         "selected_role": None,
         "is_processing": False,
         "last_results": None,
@@ -919,6 +140,10 @@ def reset_app():
         del st.session_state[key]
     init_session_state()
 
+
+# --------------------------------------------------------------------------
+# Step 0 -- entry mode
+# --------------------------------------------------------------------------
 
 def render_step0():
     st.markdown(
@@ -971,7 +196,13 @@ def render_step0():
             st.rerun()
 
 
+# --------------------------------------------------------------------------
+# Step 1 -- skills + verification
+# --------------------------------------------------------------------------
+
 def render_step1():
+    engine = get_llm_engine()
+
     st.markdown('<p class="step-caption">Step 2 of 4 · Data Gathering</p>', unsafe_allow_html=True)
     st.progress(0.25)
     st.subheader("Tell us about your current skills")
@@ -987,24 +218,23 @@ def render_step1():
         if extract_clicked:
             if not resume_file:
                 st.warning("Upload a PDF or TXT resume before extracting skills.")
-            elif not llm_provider_configured():
+            elif not engine.is_configured():
                 st.warning("No AI provider is configured. Please contact the administrator.")
             else:
                 with st.spinner("Extracting skills from resume..."):
                     try:
-                        resume_text = extract_text_from_resume_file(resume_file)
-                        raw_skills_text = extract_skills_from_resume(text=resume_text)
-                        if not raw_skills_text:
-                            st.warning("AI extraction is currently unavailable. Please try again later.")
-                        else:
-                            route_extracted_skills(raw_skills_text)
-                            st.success("Skills extracted and applied below.")
-                    except Exception as e:
-                        st.error(f"Failed to extract skills. Detailed trace:\n\n{e}")
+                        resume_text = cached_extract_text_from_upload(resume_file.name, resume_file.getvalue())
+                        raw_tokens = cached_extract_skills_via_llm(engine, resume_text)
+                        known, custom = map_tokens_to_skill_catalog(raw_tokens, ALL_TECH_SKILLS)
+                        st.session_state.parsed_known_skills = known
+                        st.session_state.parsed_custom_skills = ", ".join(custom)
+                        st.success("Skills extracted and applied below.")
+                    except LLMEngineError as e:
+                        st.error(f"Failed to extract skills: {e}")
 
         if st.session_state.parsed_known_skills or st.session_state.parsed_custom_skills:
             detected = list(dict.fromkeys(
-                st.session_state.parsed_known_skills + parse_custom_skills(st.session_state.parsed_custom_skills)
+                st.session_state.parsed_known_skills + split_comma_list(st.session_state.parsed_custom_skills)
             ))
             st.markdown("**Detected skills:**")
             st.info(", ".join(detected) if detected else "None detected yet.")
@@ -1016,7 +246,7 @@ def render_step1():
             key="resume_extra_skills",
         )
         all_user_skills = list(dict.fromkeys(
-            st.session_state.parsed_known_skills + parse_custom_skills(extra_skills_raw)
+            st.session_state.parsed_known_skills + split_comma_list(extra_skills_raw)
         ))
 
     else:
@@ -1033,7 +263,7 @@ def render_step1():
             placeholder="e.g. Rust, Kanban, Figma",
             key="manual_custom_skills",
         )
-        all_user_skills = list(dict.fromkeys(selected_skills + parse_custom_skills(custom_skills_raw)))
+        all_user_skills = list(dict.fromkeys(selected_skills + split_comma_list(custom_skills_raw)))
 
     skill_proficiency = {}
     if all_user_skills:
@@ -1051,30 +281,61 @@ def render_step1():
         st.info("Add skills above to configure proficiency levels.")
 
     st.divider()
-    st.markdown("**LeetCode Username (Optional)** — Prove your logic skills")
+    st.markdown("**Verify with public coding profiles (optional)** — strengthens your report")
+
     lc_col1, lc_col2 = st.columns([3, 1])
     with lc_col1:
         leetcode_username = st.text_input(
             "LeetCode username",
             key="leetcode_username_input",
-            label_visibility="collapsed",
             placeholder="e.g. johndoe123",
         )
     with lc_col2:
-        verify_clicked = st.button("Verify", use_container_width=True, key="btn_verify_leetcode")
+        st.write("")
+        verify_leetcode_clicked = st.button("Verify LeetCode", use_container_width=True, key="btn_verify_leetcode")
 
-    if verify_clicked:
+    if verify_leetcode_clicked:
         with st.spinner("Checking LeetCode profile..."):
-            stats = fetch_leetcode_stats(leetcode_username)
+            stats, note = cached_fetch_leetcode_stats(leetcode_username)
             if stats:
                 st.session_state.leetcode_stats = stats
+                st.toast(note, icon="⚠️" if stats.is_mock else "🏆")
+            elif note:
+                st.warning(note)
 
     if st.session_state.get("leetcode_stats"):
-        s = st.session_state.leetcode_stats
+        s: LeetCodeStats = st.session_state.leetcode_stats
+        mock_tag = " (demo data)" if s.is_mock else ""
         st.success(
-            f"✅ {s['username']}: {s['easy']} Easy · {s['medium']} Medium · {s['hard']} Hard "
-            f"({s['total']} total solved)"
+            f"✅ {s.username}{mock_tag}: {s.easy} Easy · {s.medium} Medium · {s.hard} Hard "
+            f"({s.total} total solved)"
         )
+
+    gh_col1, gh_col2 = st.columns([3, 1])
+    with gh_col1:
+        github_username = st.text_input(
+            "GitHub username",
+            key="github_username_input",
+            placeholder="e.g. johndoe",
+        )
+    with gh_col2:
+        st.write("")
+        verify_github_clicked = st.button("Verify GitHub", use_container_width=True, key="btn_verify_github")
+
+    if verify_github_clicked:
+        with st.spinner("Checking GitHub profile..."):
+            gh_stats, gh_note = cached_fetch_github_stats(github_username)
+            if gh_stats:
+                st.session_state.github_stats = gh_stats
+                st.toast(gh_note, icon="🐙")
+            elif gh_note:
+                st.warning(gh_note)
+
+    if st.session_state.get("github_stats"):
+        g: GitHubStats = st.session_state.github_stats
+        langs = ", ".join(g.top_languages) if g.top_languages else "no detectable language"
+        created = f" · since {g.account_created[:10]}" if g.account_created else ""
+        st.success(f"✅ {g.username}: {g.public_repos} public repos · top languages: {langs}{created}")
 
     st.divider()
     nav_col1, nav_col2 = st.columns([1, 2])
@@ -1092,6 +353,10 @@ def render_step1():
                 st.session_state.step = 2
                 st.rerun()
 
+
+# --------------------------------------------------------------------------
+# Step 2 -- target role
+# --------------------------------------------------------------------------
 
 def render_step2():
     st.markdown('<p class="step-caption">Step 3 of 4 · Target Role</p>', unsafe_allow_html=True)
@@ -1129,7 +394,13 @@ def render_step2():
         st.rerun()
 
 
+# --------------------------------------------------------------------------
+# Step 3 -- analysis (transitional / processing step)
+# --------------------------------------------------------------------------
+
 def render_step3():
+    engine = get_llm_engine()
+
     st.markdown('<p class="step-caption">Step 4 of 4 · Analysis</p>', unsafe_allow_html=True)
     st.progress(0.85)
     st.subheader(f"Building your report for {st.session_state.get('selected_role', '')}")
@@ -1141,33 +412,40 @@ def render_step3():
     ai_error = None
     try:
         required_skills = JOB_DATA["job_roles"][st.session_state.selected_role]["required_skills"]
+        experience_level = JOB_DATA["job_roles"][st.session_state.selected_role]["experience_level"]
+
+        verification = build_candidate_verification(
+            leetcode_stats=st.session_state.get("leetcode_stats"),
+            github_stats=st.session_state.get("github_stats"),
+        )
 
         try:
-            if not llm_provider_configured():
-                raise RuntimeError("No AI provider configured.")
-            results = ai_analyze_role(
-                target_role=st.session_state.selected_role,
-                required_skills=required_skills,
-                all_user_skills=st.session_state.all_user_skills,
-                skill_proficiencies=st.session_state.skill_proficiency,
-                leetcode_stats=st.session_state.get("leetcode_stats"),
+            if not engine.is_configured():
+                raise LLMEngineError("No AI provider configured.")
+            results = cached_ai_analyze_role(
+                engine,
+                st.session_state.selected_role,
+                tuple(required_skills),
+                tuple(st.session_state.all_user_skills),
+                tuple(sorted(st.session_state.skill_proficiency.items())),
+                verification.model_dump_json(),
             )
-        except Exception as e:
+        except LLMEngineError as e:
             print(f"AI evaluation failed, falling back to legacy analyzer: {e}")
             ai_error = str(e)
-            results = legacy_analyze_role(st.session_state.selected_role, st.session_state.skill_proficiency)
+            results = legacy_analyze_role(required_skills, st.session_state.skill_proficiency, experience_level)
 
         roadmap_weeks = None
         roadmap_error = None
-        if results["critical_missing"] and llm_provider_configured():
+        if results.critical_missing and engine.is_configured():
             try:
-                raw_roadmap = generate_ai_roadmap(
-                    target_role=st.session_state.selected_role,
-                    user_skills=st.session_state.all_user_skills,
-                    missing_skills=results["critical_missing"],
+                roadmap_weeks = cached_generate_ai_roadmap(
+                    engine,
+                    st.session_state.selected_role,
+                    tuple(st.session_state.all_user_skills),
+                    tuple(results.critical_missing),
                 )
-                roadmap_weeks = parse_roadmap_json(raw_roadmap)
-            except Exception as e:
+            except LLMEngineError as e:
                 print(f"Roadmap generation/parsing failed: {e}")
                 roadmap_error = str(e)
 
@@ -1195,8 +473,12 @@ def render_step3():
     render_step4()
 
 
+# --------------------------------------------------------------------------
+# Step 4 -- results
+# --------------------------------------------------------------------------
+
 def render_step4():
-    results = st.session_state.get("last_results")
+    results: AnalysisResult = st.session_state.get("last_results")
     if results is None:
         st.warning("No report available yet. Start over to generate one.")
         if st.button("Start Over", key="btn_start_over_empty"):
@@ -1207,33 +489,33 @@ def render_step4():
     report_role = st.session_state.last_role
     report_required_skills = st.session_state.last_required_skills
     report_skill_proficiency = st.session_state.last_skill_proficiency
-    roadmap_weeks = st.session_state.get("last_roadmap_weeks")
+    roadmap_weeks: RoadmapResponse = st.session_state.get("last_roadmap_weeks")
 
     if st.session_state.get("last_ai_error"):
         st.error(f"API Error Detected: {st.session_state.last_ai_error}")
         st.warning("AI evaluation unavailable. Fell back to strict keyword matching.")
 
     st.subheader(f"Results: {report_role}")
-    st.info(f"Typical experience level: {results['experience_level']}")
+    st.info(f"Typical experience level: {results.experience_level}")
 
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric(
         "Role Readiness",
-        f"{results['readiness_score']:.0f}%",
+        f"{results.readiness_score:.0f}%",
         help="A weighted score calculating your actual proficiency levels against the role's baseline.",
     )
     m_col2.metric(
         "Skill Coverage",
-        f"{results['coverage_score']:.0f}%",
+        f"{results.coverage_score:.0f}%",
         help="The raw percentage of required skills you possess at any level.",
     )
-    m_col3.metric("Strong Matches", len(results["strong_matches"]))
-    m_col4.metric("Critical Gaps", len(results["critical_missing"]))
+    m_col3.metric("Strong Matches", len(results.strong_matches))
+    m_col4.metric("Critical Gaps", len(results.critical_missing))
 
     st.write("Role Readiness")
-    st.progress(int(results["readiness_score"]))
+    st.progress(int(results.readiness_score))
     st.write("Skill Coverage")
-    st.progress(int(results["coverage_score"]))
+    st.progress(int(results.coverage_score))
 
     st.divider()
 
@@ -1245,41 +527,41 @@ def render_step4():
         g_col1, g_col2, g_col3 = st.columns(3)
         with g_col1:
             st.markdown("**Strong Matches**")
-            if results["strong_matches"]:
-                st.success("\n".join(format_gap_line(item) for item in results["strong_matches"]))
+            if results.strong_matches:
+                st.success("\n".join(f"- {item}" for item in results.strong_matches))
             else:
                 st.success("None yet.")
         with g_col2:
             st.markdown("**Needs Improvement**")
-            if results["needs_improvement"]:
-                st.warning("\n".join(format_gap_line(item) for item in results["needs_improvement"]))
+            if results.needs_improvement:
+                st.warning("\n".join(f"- {item}" for item in results.needs_improvement))
             else:
                 st.warning("Nothing stuck at Beginner level.")
         with g_col3:
             st.markdown("**Critical Missing Gaps**")
-            if results["critical_missing"]:
-                st.error("\n".join(f"- {req}" for req in results["critical_missing"]))
+            if results.critical_missing:
+                st.error("\n".join(f"- {req}" for req in results.critical_missing))
             else:
                 st.error("None. Full coverage.")
 
     with tab_roadmap:
-        if not results["critical_missing"]:
+        if not results.critical_missing:
             st.success("No critical missing skills detected — an AI roadmap isn't required for this role.")
         elif st.session_state.get("last_roadmap_error"):
             st.warning(f"AI roadmap generation is currently unavailable: {st.session_state.last_roadmap_error}")
-        elif not roadmap_weeks or not roadmap_weeks.get("weeks"):
+        elif not roadmap_weeks or not roadmap_weeks.weeks:
             st.warning("AI roadmap generation is currently unavailable. Please try again later.")
         else:
-            week_tabs = st.tabs([week["week_title"] for week in roadmap_weeks["weeks"]])
-            for i, (tab, week) in enumerate(zip(week_tabs, roadmap_weeks["weeks"])):
+            week_tabs = st.tabs([week.week_title for week in roadmap_weeks.weeks])
+            for i, (tab, week) in enumerate(zip(week_tabs, roadmap_weeks.weeks)):
                 with tab:
-                    if not week["tasks"]:
+                    if not week.tasks:
                         st.caption("No tasks generated for this week.")
-                    for j, task in enumerate(week["tasks"]):
+                    for j, task in enumerate(week.tasks):
                         st.checkbox(task, key=f"roadmap_task_{i}_{j}")
 
     st.divider()
-    roadmap_markdown = roadmap_weeks_to_markdown(roadmap_weeks)
+    roadmap_markdown = roadmap_to_markdown(roadmap_weeks)
     dl_col, reset_col = st.columns([2, 1])
     with dl_col:
         st.download_button(
@@ -1295,6 +577,10 @@ def render_step4():
             reset_app()
             st.rerun()
 
+
+# --------------------------------------------------------------------------
+# Entry point
+# --------------------------------------------------------------------------
 
 st.set_page_config(page_title="SkillGap Intelligence", page_icon=None, layout="wide")
 inject_global_css()
