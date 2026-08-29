@@ -2,154 +2,589 @@
 
 **AI-powered skill-gap and career-readiness analyzer**
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B)
-![AI](https://img.shields.io/badge/AI-Gemini%20%2F%20Llama%203.3-4285F4)
+![HTML5](https://img.shields.io/badge/UI-HTML5-E34F26)
+![CSS3](https://img.shields.io/badge/Styling-CSS3-1572B6)
+![JavaScript](https://img.shields.io/badge/Frontend-JavaScript-F7DF1E)
+![Node.js](https://img.shields.io/badge/Server-Node.js-339933)
+![AI](https://img.shields.io/badge/AI-NVIDIA%20API-76B900)
 
-Upload a resume or hand-pick your skills, choose a target job role, and get back a readiness score, a visual skill-gap breakdown, and an AI-written 4-week roadmap for closing the gaps - all in one Streamlit app.
+SkillGap Intelligence helps students and developers understand **how ready they are for a target technical role and what they should learn next**.
+
+Choose between uploading a resume/CV or entering skills manually, optionally verify public coding profiles, select a target job role, and receive an AI-powered readiness assessment with visual skill-gap analysis and a structured 4-week learning roadmap.
+
+The project now uses a **vanilla HTML/CSS/JavaScript frontend with a Node.js server**, replacing the previous Streamlit/Python application. AI requests are handled through the **NVIDIA API**, with the API key kept on the server through environment variables.
+
+---
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
 - [How It Works](#how-it-works)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
+- [Environment Variables](#environment-variables)
+- [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
+- [AI Analysis](#ai-analysis)
 - [Supported Roles](#supported-roles)
+- [Security Notes](#security-notes)
 - [Team](#team)
 - [License](#license)
 
+---
+
 ## Overview
 
-SkillGap Intelligence answers one question for job seekers and career-switchers: **"How ready am I for this role, and what should I do next?"**
+SkillGap Intelligence answers one question for job seekers, students, and career-switchers:
 
-Instead of a static checklist, it uses an LLM to *semantically* compare your skills against a role's requirements - so knowing PyTorch can reasonably count toward "Machine Learning," the way a human recruiter would read a resume, rather than requiring an exact keyword match. The output is a readiness score, a categorized skill-gap breakdown, and a prioritized, project-based learning roadmap.
+> **"How ready am I for this role, and what should I do next?"**
 
-**Demo:** [skillprofile.streamlit.app](https://skillprofile.streamlit.app/)
+Instead of relying only on exact keyword matches, the application uses AI to evaluate a user's skills against the requirements of a selected target role.
+
+The result includes:
+
+- **Role Readiness** score
+- **Skill Coverage** score
+- **Strong Matches**
+- **Needs Improvement**
+- **Critical Missing Gaps**
+- A visual **skill profile vs. role baseline**
+- A skill-fulfillment breakdown
+- A prioritized **4-week learning roadmap**
+
+The application is designed as a browser-based web app, with the frontend communicating with a Node.js backend that handles server-side processing and NVIDIA API requests.
+
+---
 
 ## Features
 
-- **Resume skill extraction** - upload a PDF/TXT resume; an LLM call pulls out technical skills and pre-fills the picker for you.
-- **37 target roles across 14 domains** - software engineering, data, AI/ML, hardware & embedded, mobile, game dev, cloud & DevOps, cybersecurity, Web3, databases, QA, product/program management, design, and marketing (full list in [Supported Roles](#supported-roles)).
-- **Skill picker** with 80+ predefined technologies, plus free-text custom skills for anything not on the list.
-- **Per-skill proficiency sliders** - Beginner / Intermediate / Advanced - so the score reflects depth, not just familiarity.
-- **AI semantic gap analysis** - Gemini-first, Llama-3.3-via-NVIDIA-fallback scoring of Role Readiness and Skill Coverage, with every required skill bucketed into Strong Match, Needs Improvement, or Critical Missing Gap. Falls back to deterministic keyword matching if no AI provider is reachable.
-- **Radar + bar chart visualizations** of your profile against the role baseline.
-- **Prioritized action plan** - critical gaps first, then beginner-level skills worth strengthening.
-- **AI-generated 4-week learning roadmap** for critical gaps, with every topic linked out to a YouTube search.
-- **One-click Markdown report** of the full assessment, ready to download.
+### Resume / CV Analysis
+
+Upload a supported resume and let the application extract relevant technical skills automatically.
+
+![Upload methods](screenshots/01-input-methods.png)
+
+The interface provides two paths:
+
+- **Upload Resume or CV** — automatically extract skills from a PDF/TXT resume.
+- **Enter Skills Manually** — choose technologies and set proficiency yourself.
+
+### Manual Skill Selection
+
+Users can manually build their technical profile and specify their proficiency for each selected skill.
+
+This allows the assessment to account for the difference between simply knowing a technology and having advanced experience with it.
+
+### Public Coding Profile Verification
+
+Users can optionally provide:
+
+- **LeetCode username**
+- **GitHub username**
+
+These public profiles can be used to strengthen the assessment with additional evidence of practical coding activity.
+
+![Profile verification](screenshots/03-verify-profiles.png)
+
+### Target Role Benchmarking
+
+Select the role you are targeting and use its curated skill requirements as the benchmark for the analysis.
+
+![Target role selection](screenshots/04-target-role.png)
+
+### AI-Powered Skill Gap Analysis
+
+The backend sends the relevant assessment data to an LLM through the **NVIDIA API**.
+
+The analysis evaluates the relationship between the user's current skills and the target role rather than treating the profile as a simple keyword checklist.
+
+The dashboard summarizes the result using:
+
+- Role Readiness
+- Skill Coverage
+- Strong Matches
+- Critical Gaps
+
+![Readiness overview](screenshots/05-readiness-overview.png)
+
+### Visual Skill Analysis
+
+The results include visualizations that make gaps easier to understand.
+
+The radar view compares the user's profile with the selected role's expected baseline.
+
+![Skill radar](screenshots/06-skill-radar.png)
+
+The fulfillment chart shows how closely individual skills meet the role requirements.
+
+![Skill fulfillment](screenshots/07-skill-fulfillment.png)
+
+### Prioritized Learning Roadmap
+
+The application turns the identified gaps into an actionable **4-week roadmap**.
+
+The roadmap focuses on practical tasks and learning activities rather than only listing topics.
+
+![Roadmap weeks 1 and 2](screenshots/08-roadmap-weeks-1-2.png)
+
+![Roadmap weeks 3 and 4](screenshots/09-roadmap-weeks-3-4.png)
+
+---
 
 ## How It Works
 
-**1. Upload your resume** *(optional)* and extract skills automatically.
+### 1. Choose how to provide your skills
 
-![Upload resume screen](screenshots/01-upload-resume.png)
+Start by either uploading a resume/CV or entering your skills manually.
 
-**2. Pick a target role and set your skills** - from the extracted resume, the predefined list, or typed in manually.
+![Input methods](screenshots/01-input-methods.png)
 
-![Target role and skill selection](screenshots/02-configure-role-skills.png)
+### 2. Upload a resume or configure your skills
 
-**3. Set a proficiency level** for each skill you've selected.
+When a resume is uploaded, the application extracts relevant skills automatically.
 
-![Skill proficiency sliders](screenshots/03-set-proficiency.png)
+![Resume upload](screenshots/02-upload-resume.png)
 
-**4. Click Analyze.** The app calls the LLM to semantically score your profile, with live status as it works.
+### 3. Optionally verify public coding profiles
 
-![Analysis in progress](screenshots/04-run-analysis.png)
+Provide your LeetCode and GitHub usernames if you want public coding activity to contribute additional evidence.
 
-**5. Read your results** - Role Readiness, Skill Coverage, Strong Matches, and Critical Gaps, at a glance.
+![Verify profiles](screenshots/03-verify-profiles.png)
 
-![Results overview](screenshots/05-results-overview.png)
+### 4. Select your target role
 
-**6. Explore the Gap Analysis tab** for a radar chart of your profile against the role baseline...
+Choose the job role you are preparing for.
 
-![Skill profile radar chart](screenshots/06-skill-radar.png)
+![Target role](screenshots/04-target-role.png)
 
-...and a color-coded fulfillment bar chart, with your skills sorted into Strong Matches, Needs Improvement, and Critical Missing Gaps.
+### 5. Analyze your readiness
 
-![Skill fulfillment bar chart and gap columns](screenshots/07-skill-fulfillment.png)
+The Node.js server processes the assessment and uses the NVIDIA API for AI-powered analysis.
 
-**7. Switch to the Action Plan tab** for a prioritized breakdown of what to tackle first, an AI-written 4-week roadmap, and a one-click Markdown report download.
+The dashboard presents the resulting readiness and coverage metrics.
 
-![Priority breakdown](screenshots/08-priority-breakdown.png)
+![Readiness overview](screenshots/05-readiness-overview.png)
+
+### 6. Explore the skill gaps
+
+Use the radar and fulfillment visualizations to see where your profile is strong and where it falls short of the target role.
+
+![Radar analysis](screenshots/06-skill-radar.png)
+
+![Fulfillment analysis](screenshots/07-skill-fulfillment.png)
+
+### 7. Follow the 4-week roadmap
+
+The identified gaps are converted into a structured learning plan covering four weeks.
+
+![Roadmap weeks 1 and 2](screenshots/08-roadmap-weeks-1-2.png)
+
+![Roadmap weeks 3 and 4](screenshots/09-roadmap-weeks-3-4.png)
+
+---
+
+## Architecture
+
+The application follows a simple client-server architecture:
+
+```text
+┌───────────────────────────────┐
+│        Browser / Client       │
+│                               │
+│  HTML + CSS + JavaScript      │
+│  • Forms                      │
+│  • Skill selection            │
+│  • Dashboard                  │
+│  • Charts                     │
+│  • 4-week roadmap             │
+└───────────────┬───────────────┘
+                │ HTTP / API requests
+                ▼
+┌───────────────────────────────┐
+│          Node.js Server       │
+│                               │
+│  • API routes                 │
+│  • Request validation         │
+│  • Resume/profile processing  │
+│  • Analysis orchestration     │
+│  • NVIDIA API communication   │
+└───────────────┬───────────────┘
+                │
+                │ NVIDIA API
+                ▼
+┌───────────────────────────────┐
+│       NVIDIA AI Platform      │
+│                               │
+│  LLM-powered skill analysis   │
+│  and roadmap generation       │
+└───────────────────────────────┘
+```
+
+### Why the backend handles the NVIDIA API call
+
+The NVIDIA API key should **never be exposed in browser-side JavaScript**.
+
+The frontend sends the assessment data to the Node.js server. The server reads `NVIDIA_API_KEY` from the environment and makes the AI request.
+
+```text
+Frontend
+   │
+   │ assessment data
+   ▼
+Node.js backend
+   │
+   │ NVIDIA_API_KEY
+   ▼
+NVIDIA API
+   │
+   │ AI analysis
+   ▼
+Node.js backend
+   │
+   │ result
+   ▼
+Frontend
+```
+
+---
 
 ## Tech Stack
 
-| Layer | Tools |
+| Layer | Technology |
 |---|---|
-| UI | [Streamlit](https://streamlit.io/) |
-| AI / LLM | [Google Gemini](https://ai.google.dev/)  [Llama 3.3 70B via NVIDIA NIM](https://build.nvidia.com/) (fallback) |
-| Charts | [Plotly](https://plotly.com/python/) (radar + bar charts) |
-| Resume parsing | [PyPDF2](https://pypi.org/project/PyPDF2/) |
-| Language | Python 3 |
+| Frontend | HTML5 |
+| Styling | CSS3 |
+| Client-side logic | Vanilla JavaScript |
+| Server | Node.js |
+| AI / LLM | NVIDIA API |
+| AI authentication | `NVIDIA_API_KEY` environment variable |
+| Visualizations | Browser-side JavaScript charting / visualization layer |
+| Resume input | PDF/TXT upload handled by the web application |
+| Communication | HTTP / JSON API |
+
+> **Note:** The current version no longer depends on Streamlit, Python, PyPDF2, or Plotly Python.
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the Node.js server project:
+
+```env
+NVIDIA_API_KEY=your_nvidia_api_key_here
+PORT=3000
+```
+
+The exact port can be changed to match the server configuration.
+
+### NVIDIA API Key
+
+The application requires an NVIDIA API key for AI-powered analysis.
+
+Obtain the key from the NVIDIA developer platform and keep it private.
+
+**Never put the NVIDIA API key in:**
+
+- `index.html`
+- browser-side JavaScript
+- CSS files
+- screenshots
+- GitHub commits
+- public configuration files
+
+Use an environment variable on the Node.js server instead.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+Make sure you have:
+
+- Node.js installed
+- npm installed
+- An NVIDIA API key
+- A modern web browser
+
+Check your Node.js installation:
+
+```bash
+node --version
+npm --version
+```
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Iwannabemitul/DevStorm.git
+cd DevStorm
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure environment variables
+
+Create `.env`:
+
+```env
+NVIDIA_API_KEY=your_nvidia_api_key_here
+PORT=3000
+```
+
+### 4. Start the server
+
+Use the start command defined in `package.json`, for example:
+
+```bash
+npm start
+```
+
+For development, if a development script is configured:
+
+```bash
+npm run dev
+```
+
+### 5. Open the application
+
+Open the local URL printed by the Node.js server, commonly:
+
+```text
+http://localhost:3000
+```
+
+---
 
 ## Project Structure
 
+The exact filenames may evolve as the application grows, but the current architecture follows the frontend/server separation below:
+
 ```text
 DevStorm/
-├── app.py              # Main Streamlit app - UI, scoring logic, charts, LLM calls
-├── brain.py             # Scaffolded FastAPI microservice, not currently used by app.py
-├── requirements.txt     # Pinned Python dependencies
-├── .devcontainer/        # Dev container config (GitHub Codespaces)
-└── .gitignore
+├── frontend/                 # Browser-facing application
+│   ├── index.html            # Main HTML interface
+│   ├── css/                  # Stylesheets
+│   ├── js/                   # Client-side JavaScript
+│   └── assets/               # Images and other frontend assets
+│
+├── server/                   # Node.js backend
+│   ├── routes/               # API endpoints
+│   ├── services/             # Analysis / external API logic
+│   └── ...                   # Server configuration and utilities
+│
+├── screenshots/              # Project screenshots
+├── .env                      # Local secrets (do not commit)
+├── .env.example              # Environment variable template
+├── package.json              # Node.js dependencies and scripts
+├── package-lock.json         # Locked dependency versions
+└── README.md
 ```
+
+> Adjust the folder names above if the repository uses a different frontend/server directory layout. The important architectural distinction is that **browser code handles the UI while Node.js handles server-side/API responsibilities**.
+
+---
+
+## AI Analysis
+
+The AI layer is responsible for turning the user's profile and target role into a useful career-readiness assessment.
+
+A typical analysis flow is:
+
+```text
+User Skills
+    +
+Proficiency Levels
+    +
+Target Role Requirements
+    +
+Optional Public Profile Data
+    │
+    ▼
+Node.js Analysis Service
+    │
+    ▼
+NVIDIA API / LLM
+    │
+    ▼
+Structured Assessment
+    │
+    ├── Role Readiness
+    ├── Skill Coverage
+    ├── Strong Matches
+    ├── Needs Improvement
+    ├── Critical Missing Gaps
+    └── Learning Roadmap
+```
+
+The generated results are then presented through the web interface using cards, charts, categorized gap lists, and the four-week roadmap.
+
+---
 
 ## Supported Roles
 
+The application supports a broad set of technical and professional roles, including:
+
 <details>
-<summary>37 target roles across 14 domains (click to expand)</summary>
+<summary>37 target roles across 14 domains</summary>
 
-**Core Software Engineering**
-Software Engineer · Full Stack Developer · Backend Developer · Frontend Developer
+### Core Software Engineering
 
-**Data**
-Data Scientist · Data Engineer · Data Analyst
+- Software Engineer
+- Full Stack Developer
+- Backend Developer
+- Frontend Developer
 
-**AI / Machine Learning**
-AI Engineer · Machine Learning Engineer · MLOps Engineer · NLP Engineer · Computer Vision Engineer · Robotics Engineer
+### Data
 
-**Hardware & Systems**
-Embedded Systems Engineer · IoT Architect · Firmware Engineer · Hardware Design Engineer · Systems Optimization Engineer
+- Data Scientist
+- Data Engineer
+- Data Analyst
 
-**Mobile**
-Android Developer · iOS Developer
+### AI / Machine Learning
 
-**Game Development**
-Game Developer · Game Designer
+- AI Engineer
+- Machine Learning Engineer
+- MLOps Engineer
+- NLP Engineer
+- Computer Vision Engineer
+- Robotics Engineer
 
-**Cloud & Infrastructure**
-Cloud Architect · DevOps Engineer · Site Reliability Engineer
+### Hardware & Systems
 
-**Cybersecurity**
-Cybersecurity Analyst · Penetration Tester · Security Engineer
+- Embedded Systems Engineer
+- IoT Architect
+- Firmware Engineer
+- Hardware Design Engineer
+- Systems Optimization Engineer
 
-**Web3 / Blockchain**
-Blockchain Developer · Web3 Engineer
+### Mobile
 
-**Databases**
-Database Administrator · Database Engineer
+- Android Developer
+- iOS Developer
 
-**QA**
-QA Automation Engineer
+### Game Development
 
-**Product & Program Management**
-Product Manager · Technical Program Manager
+- Game Developer
+- Game Designer
 
-**Design**
-UX/UI Designer
+### Cloud & Infrastructure
 
-**Marketing**
-Digital Marketing Specialist
+- Cloud Architect
+- DevOps Engineer
+- Site Reliability Engineer
 
-Each role has its own curated list of required skills and a typical experience level, defined in `app.py`.
+### Cybersecurity
+
+- Cybersecurity Analyst
+- Penetration Tester
+- Security Engineer
+
+### Web3 / Blockchain
+
+- Blockchain Developer
+- Web3 Engineer
+
+### Databases
+
+- Database Administrator
+- Database Engineer
+
+### QA
+
+- QA Automation Engineer
+
+### Product & Program Management
+
+- Product Manager
+- Technical Program Manager
+
+### Design
+
+- UX/UI Designer
+
+### Marketing
+
+- Digital Marketing Specialist
 
 </details>
 
+Each role is associated with a curated set of expected skills and an appropriate experience benchmark.
+
+---
+
+## Screenshots
+
+### Input & Profile Setup
+
+| Input methods | Resume upload |
+|---|---|
+| ![Input methods](screenshots/01-input-methods.png) | ![Resume upload](screenshots/02-upload-resume.png) |
+
+| Public profile verification | Target role |
+|---|---|
+| ![Profile verification](screenshots/03-verify-profiles.png) | ![Target role](screenshots/04-target-role.png) |
+
+### Analysis Dashboard
+
+![Readiness overview](screenshots/05-readiness-overview.png)
+
+![Skill radar](screenshots/06-skill-radar.png)
+
+![Skill fulfillment](screenshots/07-skill-fulfillment.png)
+
+### 4-Week Roadmap
+
+![Weeks 1 and 2](screenshots/08-roadmap-weeks-1-2.png)
+
+![Weeks 3 and 4](screenshots/09-roadmap-weeks-3-4.png)
+
+---
+
+## Security Notes
+
+Because the application uses an external AI API:
+
+1. **Keep `NVIDIA_API_KEY` server-side.**
+2. Add `.env` to `.gitignore`.
+3. Never hard-code the API key in JavaScript.
+4. Never commit real API keys to GitHub.
+5. Use `.env.example` with placeholder values only.
+6. Validate and sanitize data received from the browser before sending it to external services.
+7. Avoid logging API keys or sensitive user data.
+
+Example `.gitignore` entries:
+
+```gitignore
+node_modules/
+.env
+.env.*
+!.env.example
+```
+
+---
+
+## Architecture
+```text
+HTML + CSS + JavaScript + Node.js
+NVIDIA API
+```
+---
+
 ## Team
 
-Built by [@iwannabemitul](https://github.com/iwannabemitul), [@sharma-ronak](https://github.com/sharma-ronak75), [@nitika](https://github.com/thenitikakaushik) for the DevStorm 2026 Hackathon (Round - 1).
+Built by [@iwannabemitul](https://github.com/Iwannabemitul), [@sharma-ronak](https://github.com/sharma-ronak75), and [@nitika](https://github.com/thenitikakaushik) for the **DevStorm 2026 Hackathon (Round - 1)**.
+
+---
 
 ## License
 
-No license file is currently included in this repository. Until one is added, all rights are reserved by the authors - reach out before reusing this code outside the hackathon.
+No license file is currently included in this repository.
 
+Until a license is added, **all rights are reserved by the authors**. Please reach out to the project authors before reusing or redistributing the code outside the hackathon.
