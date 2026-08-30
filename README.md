@@ -1,4 +1,4 @@
-# SkillGap Intelligence
+# SkillGap Analyzer
 
 **AI-powered skill-gap and career-readiness analyzer**
 
@@ -21,7 +21,7 @@ Upload a resume or hand-pick your skills, choose a target job role, and get back
 
 ## Overview
 
-SkillGap Intelligence answers one question for job seekers and career-switchers: **"How ready am I for this role, and what should I do next?"**
+SkillGap Analyzer answers one question for job seekers and career-switchers: **"How ready am I for this role, and what should I do next?"**
 
 Instead of a static checklist, it uses an LLM to *semantically* compare your skills against a role's requirements - so knowing PyTorch can reasonably count toward "Machine Learning," the way a human recruiter would read a resume, rather than requiring an exact keyword match. The output is a readiness score, a categorized skill-gap breakdown, and a prioritized, project-based learning roadmap.
 
