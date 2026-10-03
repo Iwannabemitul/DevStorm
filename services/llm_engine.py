@@ -15,10 +15,10 @@ from pydantic import BaseModel, ValidationError
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 GEMINI_MODEL_PRIORITY: List[str] = [
-    "models/gemini-2.0-flash",
-    "models/gemini-1.5-flash",
+    "models/gemini-3.1-flash-lite",
+    "models/gemini-3.5-flash-lite",
     "models/gemini-1.5-pro",
-    "models/gemini-pro",
+    ,
 ]
 
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
